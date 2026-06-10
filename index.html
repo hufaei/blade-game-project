@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>刃 · BLADE</title>
+<link rel="stylesheet" href="./src/styles.css">
+</head>
+<body>
+<canvas id="cv"></canvas>
+<div class="vignette"></div>
+<div class="wt-tint" id="wtFx"></div>
+<div class="hurt-flash" id="hurtFx"></div>
+<div id="ui">
+  <div class="hud">
+    <div class="score" id="scoreEl">0</div>
+    <div class="wave" id="waveEl">WAVE 1</div>
+    <div class="hibar" id="hiEl"></div>
+    <div class="mutbar" id="mutEl"></div>
+  </div>
+  <div class="hp" id="hpEl"></div>
+  <div class="combo-box" id="comboBox">
+    <div class="combo-n" id="comboN">0</div>
+    <div class="combo-l">COMBO</div>
+    <div class="combo-bar"><div class="combo-fill" id="comboFill"></div></div>
+    <div class="mult" id="multEl2">×1.0</div>
+  </div>
+  <div class="ult-wrap" id="ultWrap">
+    <div class="ult-track"><div class="ult-fill" id="ultFill"></div></div>
+    <div class="ult-label">L · 居合一闪</div>
+  </div>
+  <div class="perks" id="perksEl"></div>
+  <div id="toasts"></div>
+  <div class="bossbar" id="bossBar">
+    <div class="boss-name" id="bossName">◆ 核心壁垒 BULWARK ◆</div>
+    <div class="boss-track"><div class="boss-fill" id="bossFill"></div></div>
+  </div>
+  <div class="banner" id="bannerEl"></div>
+
+  <div class="screen" id="menuScr">
+    <h1 id="titleEl">刃 · BLADE</h1>
+    <div class="sub">GEOMETRIC SLASHER · 深渊版</div>
+    <div class="keys">
+      <div><span class="kbd">W</span><span class="kbd">A</span><span class="kbd">S</span><span class="kbd">D</span><br>移动</div>
+      <div><span class="kbd">J</span>/<span class="kbd">空格</span><br>三连斩 · 可弹反</div>
+      <div><span class="kbd">K</span>/<span class="kbd">Shift</span><br>完美闪避</div>
+      <div><span class="kbd">L</span><br>必杀</div>
+      <div><span class="kbd">P</span><br>暂停</div>
+    </div>
+    <div class="chars" id="charsEl"></div>
+    <div class="achs" id="achsEl"></div>
+    <div class="streak" id="streakEl"></div>
+    <div class="world" id="worldEl"></div>
+    <div class="mission-box">
+      <div class="mission-head"><span>◆ 今日修行</span><span>本机存档</span></div>
+      <div id="dossierEl"></div>
+      <div id="missionsEl"></div>
+      <div id="masteryEl"></div>
+      <div class="codex-line" id="codexEl"></div>
+      <div class="chain-line" id="chainEl"></div>
+    </div>
+    <div class="meta-box">
+      <div class="meta-head"><span>◆ 永久强化</span><span class="shards">✧ 晶核 <b id="shardsEl">0</b></span></div>
+      <div id="metaList"></div>
+    </div>
+    <div class="hibar" id="menuHi" style="margin-bottom:12px;font-size:12px;opacity:.7;text-align:center"></div>
+    <div class="btn-row">
+      <button class="btn" id="startBtn">开 始</button>
+      <button class="btn daily" id="dailyBtn">今日挑战</button>
+      <button class="btn raid" id="raidBtn" disabled>夜袭核心</button>
+    </div>
+    <div class="daily-hint" id="dailyHint"></div>
+    <div class="lb-tabs"><span class="lbt on" id="tabW">本周榜</span><span class="lbt" id="tabA">总 榜</span></div>
+    <div class="lb" id="menuLb"></div>
+  </div>
+
+  <div class="screen upg-center hide" id="upgScr">
+    <div class="upg-title">◆ 强 化 ◆</div>
+    <div class="upg-sub">选择一项 · 按 1 / 2 / 3 或点击</div>
+    <div class="cards" id="cardsEl"></div>
+  </div>
+
+  <div class="screen hide" id="overScr">
+    <div class="grade" id="gradeEl">S</div>
+    <div class="sub" style="margin-bottom:8px">RANK</div>
+    <div class="newrec hide" id="newRec">★ 新纪录 ★</div>
+    <div class="final">最终得分 <b id="finalScore">0</b></div>
+    <div class="over-shards" id="overShards"></div>
+    <div class="mission-result" id="missionResult"></div>
+    <div class="stat-row" id="statRow"></div>
+    <div class="gap-hint" id="gapHint"></div>
+    <div class="name-box hide" id="nameBox">
+      <input id="nameIn" maxlength="8" placeholder="输入名字上榜">
+      <button class="btn-sm" id="submitBtn">上 榜</button>
+    </div>
+    <div class="over-actions">
+      <button class="btn" id="retryBtn">再 来</button>
+      <button class="btn menu" id="menuBtn">返回菜单</button>
+    </div>
+    <div class="rhint">按 R 立即再战 · 按 M 返回菜单</div>
+    <div class="lb" id="overLb"></div>
+  </div>
+</div>
+
+<script type="module" src="./src/main.js"></script>
+</body>
+</html>

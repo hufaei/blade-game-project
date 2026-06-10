@@ -1,0 +1,50 @@
+export const RAR = ['普通','稀有','史诗'];
+
+export function createDefaultSkillState() {
+  return {
+    range:1,
+    spd:1,
+    dashCD:1,
+    comboWin:0,
+    crit:0,
+    shock:0,
+    heavy:0,
+    ultRate:1,
+    lifesteal:0,
+    wave:0,
+    rage:false,
+    revive:false,
+    kbMul:1,
+    aspd:1,
+    shardMul:1,
+    shieldOn:false,
+    exec:false,
+    explode:false,
+    wtPlus:false
+  };
+}
+
+export function createPerks({ ST, P, buildHearts }) {
+  return [
+    { id:'range', r:0, ic:'⟢', nm:'利刃延伸', ds:'攻击范围 +12%', f:()=>ST.range+=0.12 },
+    { id:'spd', r:0, ic:'⇶', nm:'疾风步', ds:'移动速度 +10%', f:()=>ST.spd+=0.10 },
+    { id:'hp', r:0, ic:'◈', nm:'强韧之心', ds:'生命上限 +1 并回复 1 点', f:()=>{P.maxHp++;P.hp=Math.min(P.maxHp,P.hp+1);buildHearts();} },
+    { id:'dash', r:0, ic:'⟿', nm:'影舞', ds:'冲刺冷却 -18%', f:()=>ST.dashCD*=0.82 },
+    { id:'kb', r:0, ic:'≋', nm:'怒涛', ds:'击退力 +30%', f:()=>ST.kbMul+=0.3 },
+    { id:'haste', r:0, ic:'⚡', nm:'迅斩', ds:'攻击速度 +10%', f:()=>ST.aspd+=0.10 },
+    { id:'life', r:1, ic:'❖', nm:'嗜血之刃', ds:'每击杀 8 个敌人\n回复 1 点生命', f:()=>ST.lifesteal=8, once:true },
+    { id:'cwin', r:1, ic:'∞', nm:'连击大师', ds:'连击维持时间 +0.8 秒', f:()=>ST.comboWin+=0.8 },
+    { id:'crit', r:1, ic:'✦', nm:'会心', ds:'15% 几率双倍伤害', f:()=>ST.crit=Math.min(0.6,ST.crit+0.15) },
+    { id:'ult', r:1, ic:'⌬', nm:'能量回路', ds:'必杀充能速度 +30%', f:()=>ST.ultRate+=0.3 },
+    { id:'heavy', r:1, ic:'▼', nm:'重刃', ds:'第三段重击伤害 +1', f:()=>ST.heavy++ },
+    { id:'shard2', r:1, ic:'✧', nm:'聚晶', ds:'本局结算晶核 +30%', f:()=>ST.shardMul+=0.3 },
+    { id:'shield', r:1, ic:'⛨', nm:'棱镜护壁', ds:'获得护盾\n每 18 秒抵挡一次伤害', f:()=>ST.shieldOn=true, once:true },
+    { id:'exec', r:1, ic:'☩', nm:'处决', ds:'非Boss敌人血量低于 1/3\n时直接斩杀', f:()=>ST.exec=true, once:true },
+    { id:'shock', r:2, ic:'◎', nm:'余震', ds:'第三段重击释放冲击波\n波及周围所有敌人', f:()=>ST.shock++ },
+    { id:'wave', r:2, ic:'⌁', nm:'刃风', ds:'每次挥刀射出飞刃\n可穿透敌人', f:()=>ST.wave++ },
+    { id:'rage', r:2, ic:'♨', nm:'狂怒', ds:'连击 ≥20 时\n全伤害 +1', f:()=>ST.rage=true, once:true },
+    { id:'revive', r:2, ic:'✚', nm:'不灭', ds:'致命伤害时免死一次\n并回复 3 点生命', f:()=>ST.revive=true, once:true },
+    { id:'explode', r:2, ic:'✸', nm:'裂变', ds:'敌人死亡时 35% 几率爆炸\n波及周围敌人 可连锁', f:()=>ST.explode=true, once:true },
+    { id:'wtime', r:2, ic:'⧖', nm:'时之刃', ds:'完美闪避冷却减半\n子弹时间延长', f:()=>ST.wtPlus=true, once:true },
+  ];
+}

@@ -1,0 +1,11 @@
+{
+  "name": "blade-game",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "node tools/dev-server.mjs",
+    "start": "node tools/dev-server.mjs",
+    "test": "node --test tests/*.test.js"
+  }
+}
