@@ -725,7 +725,8 @@ function doAttack(){
     slashes.push({
       x:P.x, y:P.y, a:arc.angle, t:0, dur:st.dur / aspdNow(),
       range:arc.range, half:arc.half, stage:P.atkStage, heavy,
-      flip:(P.atkStage + idx) % 2 === 1, rgb:PC.rgb, weapon:attack.visual, sub:idx > 0
+      flip:(P.atkStage + idx) % 2 === 1, rgb:PC.rgb, weapon:attack.visual,
+      sub:idx > 0 && attack.visual !== 'dual'   // 双刃两道弧同亮
     });
   });
   burst(P.x + Math.cos(P.face) * range * 0.7, P.y + Math.sin(P.face) * range * 0.7, PC.col, dashStrikeActive ? 8 : 3, P.face);
@@ -942,7 +943,7 @@ function tryDash(){
   if (!dx && !dy){ dx = Math.cos(P.face); dy = Math.sin(P.face); }
   const l = Math.hypot(dx, dy);
   P.dvx = dx/l; P.dvy = dy/l;
-  P.dashT = 0.16; P.dashCD = 0.55 * ST.dashCD; P.inv = Math.max(P.inv, 0.24);
+  P.dashT = 0.16; P.dashCD = 1.55 * ST.dashCD; P.inv = Math.max(P.inv, 0.24);
   P.atkT = 0; P.atkStage = 0; P.atkCool = 0;   // 闪避取消攻击后摇
   P.dashStrikeT = 0.38;                          // 冲刺斩窗口
   sfx('dash');
@@ -1976,6 +1977,7 @@ function update(dt){
   }
 
   for (const s of slashes){
+    if (s.weapon === 'dualx') continue;   // X 斩无扫弧轨迹粒子
     if (s.t < s.dur){
       const pr = s.t / s.dur;
       const ease = 1 - Math.pow(1 - pr, 3);
@@ -2069,6 +2071,33 @@ function crescent(x, y, r1, r0, a0, a1){
 function drawSlash(s){
   const pr = clamp(s.t / s.dur, 0, 1);
   const fade = 1 - pr * pr;
+  if (s.weapon === 'dualx'){
+    // X 斩：两道交叉剑光在身前，第二道略迟
+    const cx = s.x + Math.cos(s.a) * s.range * 0.5;
+    const cy = s.y + Math.sin(s.a) * s.range * 0.5;
+    const L = s.range * 0.75;
+    ctx.save();
+    ctx.lineCap = 'round';
+    for (const [off, delay] of [[-0.55, 0], [0.55, 0.12]]){
+      const lp = clamp((pr - delay) / 0.42, 0, 1);   // 两道线都在动画前半段画完，X 成形后保持发光
+      if (lp <= 0) continue;
+      const a = s.a + off;
+      const x1 = cx - Math.cos(a) * L, y1 = cy - Math.sin(a) * L;
+      const x2 = x1 + Math.cos(a) * 2 * L * lp, y2 = y1 + Math.sin(a) * 2 * L * lp;
+      ctx.globalAlpha = fade;
+      ctx.strokeStyle = `rgba(${s.rgb},0.4)`;
+      ctx.lineWidth = 14 * (1 - pr);
+      ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+      ctx.shadowColor = `rgb(${s.rgb})`; ctx.shadowBlur = 22;
+      ctx.strokeStyle = 'rgba(255,255,255,0.95)';
+      ctx.lineWidth = 5 * (1 - pr * 0.5);
+      ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+      ctx.shadowBlur = 0;
+    }
+    ctx.restore();
+    ctx.globalAlpha = 1;
+    return;
+  }
   if (s.weapon === 'iaido' && s.heavy){
     // 突进一闪：直线剑光沿冲刺方向
     const x2 = s.x + Math.cos(s.a) * s.range, y2 = s.y + Math.sin(s.a) * s.range;
@@ -2638,6 +2667,7 @@ function draw(){
 if (location.search.includes('debug=1')){
   window.__skipToWave = n => { wave = n - 1; enemies = []; spawnQ = []; eshots = []; impacts = []; firetrails = []; boss = null; waveDone = false; nextWave(); };
   window.__levelUp = () => { level++; pendingLevels++; };   // 波末结算
+  window.__pstate = () => ({ stage:P.atkStage, atkT:+P.atkT.toFixed(3), x:Math.round(P.x), y:Math.round(P.y), inv:+P.inv.toFixed(2), slashW: slashes.map(s2 => s2.weapon).join(',') });
   window.__clearWave = () => {
     spawnQ = [];
     for (let i = enemies.length - 1; i >= 0; i--) killEnemy(i, 0);
@@ -2650,19 +2680,26 @@ let last = performance.now();
 function loop(now){
   const dt = Math.min(0.033, (now - last) / 1000);
   last = now;
-  if (state === 'play') update(dt);
-  else if (state === 'over'){
-    for (let i = particles.length - 1; i >= 0; i--){
-      const p = particles[i];
-      p.t += dt;
-      if (p.t >= p.life){ particles.splice(i, 1); continue; }
-      p.x += p.vx * dt; p.y += p.vy * dt;
-      p.vx *= Math.pow(0.01, dt); p.vy *= Math.pow(0.01, dt);
+  try {
+    if (state === 'play') update(dt);
+    else if (state === 'over'){
+      for (let i = particles.length - 1; i >= 0; i--){
+        const p = particles[i];
+        p.t += dt;
+        if (p.t >= p.life){ particles.splice(i, 1); continue; }
+        p.x += p.vx * dt; p.y += p.vy * dt;
+        p.vx *= Math.pow(0.01, dt); p.vy *= Math.pow(0.01, dt);
+      }
+      shake = Math.max(0, shake - 60 * dt);
+      shakeX = rnd(-shake, shake); shakeY = rnd(-shake, shake);
     }
-    shake = Math.max(0, shake - 60 * dt);
-    shakeX = rnd(-shake, shake); shakeY = rnd(-shake, shake);
+    draw();
+  } catch(e){
+    if (!window.__frameErrs || window.__frameErrs.length < 3){
+      console.error('frame error:', e);
+      window.__frameErrs = (window.__frameErrs || []).concat((e.message || '?'));
+    }
   }
-  draw();
   requestAnimationFrame(loop);
 }
 requestAnimationFrame(loop);

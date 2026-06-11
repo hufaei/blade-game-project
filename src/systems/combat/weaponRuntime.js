@@ -12,10 +12,12 @@ function weaponIdFor(character) {
 
 export function createWeaponAttack({ character, stage, baseSlash, face, range }) {
   const weaponId = weaponIdFor(character);
+  // 终结段由角色连段数据长度决定（连段长度可按角色不同）
+  const final = stage === ((character.slash ? character.slash.length : 3) - 1);
 
   if (weaponId === 'iaido') {
-    // 居合刀：第三段是突进一闪 —— 窄长判定 + 前冲 + 短无敌帧
-    if (stage === 2) {
+    // 居合刀：终结段是突进一闪 —— 窄长判定 + 前冲 + 短无敌帧
+    if (final) {
       return {
         weaponId,
         visual: 'iaido',
@@ -33,16 +35,15 @@ export function createWeaponAttack({ character, stage, baseSlash, face, range })
   }
 
   if (weaponId === 'dual') {
-    // 双短刃：每段都是双弧（主弧 + 背弧），终结段为两道对置半圆旋斩
-    if (baseSlash.half >= 3) {
+    // 双短刃：左右双刃同时前斩（交错弧）；终结段 X 斩 + 后撤步闪避
+    if (final) {
+      // 无敌帧收紧到 0.18s：避免高频连段把闪避 CD 削弱架空
       return {
         weaponId,
-        visual: 'dual',
-        movementBoost: 0,
-        hitArcs: [
-          { angle: face, half: 1.6, range, damageMul: 1 },
-          { angle: face + Math.PI, half: 1.6, range, damageMul: 1 }
-        ]
+        visual: 'dualx',
+        movementBoost: -420,
+        invuln: 0.18,
+        hitArcs: [{ angle: face, half: 1.5, range: range * 1.15, damageMul: 1 }]
       };
     }
     return {
@@ -50,21 +51,21 @@ export function createWeaponAttack({ character, stage, baseSlash, face, range })
       visual: 'dual',
       movementBoost: 0,
       hitArcs: [
-        { angle: face, half: baseSlash.half, range, damageMul: 1 },
-        { angle: face + Math.PI, half: 0.95, range: range * 0.7, damageMul: 1 }
+        { angle: face - 0.22, half: baseSlash.half * 0.9, range, damageMul: 1 },
+        { angle: face + 0.22, half: baseSlash.half * 0.9, range: range * 0.94, damageMul: 1 }
       ]
     };
   }
 
   if (weaponId === 'odachi') {
-    // 大太刀：宽弧重斩，第三段保留全周斩并附带震波
+    // 大太刀：宽弧重斩，终结段保留全周斩并附带震波
     const attack = {
       weaponId,
       visual: 'odachi',
       movementBoost: 0,
       hitArcs: [{ angle: face, half: baseSlash.half, range, damageMul: 1 }]
     };
-    if (stage === 2) {
+    if (final) {
       attack.shockwave = { radius: 170, damage: 1, knockback: 460 };
     }
     return attack;

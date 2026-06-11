@@ -41,7 +41,8 @@ const server = createServer((req, res) => {
   }
 
   res.writeHead(200, {
-    'content-type': mimeTypes[extname(filePath).toLowerCase()] || 'application/octet-stream'
+    'content-type': mimeTypes[extname(filePath).toLowerCase()] || 'application/octet-stream',
+    'cache-control': 'no-store'   // 开发环境禁缓存，避免 ES module 被浏览器启发式缓存
   });
   createReadStream(filePath).pipe(res);
 });
