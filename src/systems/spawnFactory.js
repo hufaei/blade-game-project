@@ -39,7 +39,9 @@ export function createEnemy({ type, x, y, wave, mutation, width, height, fastWar
     flash:0,
     warmup: fastWarm ? 0.25 : 0.7,
     rot: rnd(0, TAU),
-    lungeT: (type === 'shooter' ? rnd(0.8, 1.6) : type === 'healer' ? rnd(1.5, 2.5) : type === 'phantom' ? rnd(1.2, 1.8) : 0),
+    flank: rnd(-0.85, 0.85),
+    lungeT: (type === 'shooter' ? rnd(0.8, 1.6) : type === 'healer' ? rnd(1.5, 2.5) : type === 'phantom' ? rnd(1.2, 1.8)
+      : type === 'sniper' ? rnd(1.0, 2.0) : type === 'brood' ? rnd(2.0, 3.0) : type === 'charger' ? rnd(0.8, 1.6) : 0),
     lungeState:0,
     lvx:0,
     lvy:0,

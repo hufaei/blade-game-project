@@ -9,6 +9,10 @@ export const KNAMES = {
   healer:'修复使',
   shielder:'壁垒兵',
   phantom:'虚影',
+  charger:'蓄能战车',
+  sniper:'棱光狙击',
+  brood:'增殖育母',
+  vortex:'引力井',
   boss:'巨型核心'
 };
 
@@ -22,5 +26,9 @@ export const ETYPES = {
   bomber:  { hp:1, r:13, spd:170, col:'#ff4d6d', score:150, kb:0,   sides:10 },
   healer:  { hp:3, r:18, spd:60,  col:'#7df0c0', score:300, kb:260, sides:8 },
   shielder:{ hp:3, r:20, spd:72,  col:'#5c7cfa', score:280, kb:140, sides:4 },
-  phantom: { hp:2, r:14, spd:115, col:'#c06ee8', score:260, kb:380, sides:5 }
+  phantom: { hp:2, r:14, spd:115, col:'#c06ee8', score:260, kb:380, sides:5 },
+  charger: { hp:3, r:18, spd:70,  col:'#e0b06e', score:320, kb:90,  sides:3 },
+  sniper:  { hp:2, r:14, spd:75,  col:'#ff8cf0', score:340, kb:300, sides:6 },
+  brood:   { hp:5, r:24, spd:48,  col:'#a4e07a', score:380, kb:160, sides:7 },
+  vortex:  { hp:3, r:20, spd:40,  col:'#7a9cff', score:360, kb:100, sides:9 }
 };

@@ -10,6 +10,14 @@ const BOSS_INFO = {
   hive: {
     name: 'HIVE',
     hint: '召唤间隙会放慢，优先清掉蜂群。'
+  },
+  reaper: {
+    name: 'REAPER',
+    hint: '冲斩留下的焰痕会灼烧，背刺瞬移前盯紧红圈。'
+  },
+  mortar: {
+    name: 'MORTAR',
+    hint: '炮击落点提前一秒标记，持续移动别停脚。'
   }
 };
 
