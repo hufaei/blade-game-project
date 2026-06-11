@@ -17,8 +17,8 @@ export function createEnemy({ type, x, y, wave, mutation, width, height, fastWar
   const p = x !== undefined ? { x, y } : edgePos({ width, height });
   const sc = 1 + wave * 0.055;
   const canElite = wave >= 3 && type !== 'swarm' && type !== 'bomber' && x === undefined;
-  const elite = canElite && Math.random() < Math.min((0.05 + wave * 0.012) * mutation.elite, 0.45);
-  const hpv = (t.hp + (type === 'tank' ? Math.floor(wave/4) : 0) + (type === 'chaser' && wave >= 8 ? 1 : 0)) * (elite ? 3 : 1);
+  const elite = canElite && Math.random() < Math.min((0.06 + wave * 0.018) * mutation.elite, 0.5);
+  const hpv = (t.hp + (type === 'tank' ? Math.floor(wave/3) : 0) + (type === 'chaser' && wave >= 6 ? 1 : 0)) * (elite ? 3 : 1);
 
   const enemy = {
     type,

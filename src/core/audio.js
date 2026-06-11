@@ -1,5 +1,14 @@
 let AC = null;
 let noiseBuf = null;
+let muted = false;
+
+export function setMuted(m) {
+  muted = !!m;
+}
+
+export function isMuted() {
+  return muted;
+}
 
 export function initAudio() {
   if (AC) return;
@@ -21,7 +30,7 @@ function env(g, t0, a, peak, dur) {
 }
 
 export function sfx(type) {
-  if (!AC) return;
+  if (!AC || muted) return;
   const t = AC.currentTime;
   const osc = (wave, f0, f1, dur, peak, atk = 0.002, dl = 0) => {
     const o = AC.createOscillator();

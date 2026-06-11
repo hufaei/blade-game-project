@@ -1,6 +1,6 @@
 import { $ } from './core/dom.js';
 import { TAU, angDiff, clamp, lerp, rnd } from './core/math.js';
-import { initAudio, resumeAudio, sfx } from './core/audio.js';
+import { initAudio, resumeAudio, setMuted, sfx } from './core/audio.js';
 import { CHARS } from './content/characters.js';
 import { ACHS } from './content/achievements.js';
 import { META } from './content/meta-upgrades.js';
@@ -11,7 +11,7 @@ import { RAR, createDefaultSkillState, createPerks } from './content/perks.js';
 import { buildWavePlan } from './systems/wavePlanner.js';
 import { createBoss, createEnemy, markHunter } from './systems/spawnFactory.js';
 import { createStorageAdapter } from './systems/storage/storageAdapter.js';
-import { createWeaponAttack, findHitArc, scaledDamage } from './systems/combat/weaponRuntime.js';
+import { DASH_STRIKES, createDashStrikeAttack, createWeaponAttack, findHitArc, scaledDamage } from './systems/combat/weaponRuntime.js';
 import { applyMissionRewards, clearNightRaid, createDefaultProgression, createRunMissions, ensureDailyProgression, getUnlockedTechniques } from './systems/progression/missionSystem.js';
 import { bossCodexSummary, recordBossEncounter } from './systems/progression/bossCodex.js';
 import { createDossier } from './systems/progression/dossier.js';
@@ -73,6 +73,7 @@ async function loadSaves(){
       if (!stats.progression) stats.progression = createDefaultProgression();
     }
   } catch(e){}
+  setMuted(!!stats.muted);
   ensureDailyProgression(stats, todayKey());
   try { const r = await storage.get('blade_lb', true); if (r && r.value) lbAll = JSON.parse(r.value); } catch(e){}
   try { const r = await storage.get('blade_lbw_' + weekKey(), true); if (r && r.value) lbWeek = JSON.parse(r.value); } catch(e){}
@@ -310,7 +311,7 @@ let timeScale = 1, hitstop = 0, slowmo = 0, wt = 0;
 let shake = 0, shakeX = 0, shakeY = 0, flashA = 0;
 let score = 0, wave = 0, kills = 0, maxCombo = 0, perfects = 0, ults = 0, bossKills = 0;
 let combo = 0, comboT = 0;
-let ult = 0, ultFiring = 0, ultLines = [];
+let ult = 0, ultFiring = 0, ultLines = [], ultEvents = [];
 let lifestealCnt = 0;
 let lastKiller = 'chaser';
 let pdCD = 0, shieldT = 0;
@@ -328,8 +329,10 @@ let owned = [];
 const P = {
   x:0, y:0, vx:0, vy:0, face:0, hp:6, maxHp:6, r:14, spd:320,
   atkStage:0, atkT:0, atkBuf:false, atkCool:0,
-  dashT:0, dashCD:0, inv:0, dvx:0, dvy:0, trail:[]
+  dashT:0, dashCD:0, inv:0, dvx:0, dvy:0, trail:[], dashStrikeT:0
 };
+let dashStrikeActive = false, pdCritReady = false;
+function aspdNow(){ return ST.aspd * (combo >= 20 ? 1.2 : combo >= 10 ? 1.1 : 1); }
 const PERKS = createPerks({ ST, P, buildHearts });
 let enemies = [], particles = [], slashes = [], floats = [], spawnQ = [], rings = [], blades = [], eshots = [];
 let boss = null;
@@ -342,6 +345,7 @@ addEventListener('keydown', e => {
   const attackKey = k === 'j' || k === 'keyj' || k === ' ' || k === 'space' || e.code === 'KeyJ' || e.code === 'Space';
   keys[k] = true;
   if (attackKey || ['arrowup','arrowdown','arrowleft','arrowright'].includes(k)) e.preventDefault();
+  if (k === 'm' && state !== 'over' && document.activeElement !== $('nameIn')) toggleMute();
   if (state === 'play'){
     if (attackKey) P.atkBuf = true;
     if (k === 'k' || k === 'shift') tryDash();
@@ -358,6 +362,13 @@ addEventListener('keydown', e => {
   }
 });
 addEventListener('keyup', e => keys[e.key.toLowerCase()] = false);
+
+function toggleMute(){
+  stats.muted = !stats.muted;
+  setMuted(stats.muted);
+  saveStats();
+  toast(stats.muted ? '🔇 已静音 · 按 M 恢复' : '🔊 声音已开启');
+}
 
 // ---------- 流程 ----------
 function updateStreak(){
@@ -382,6 +393,7 @@ function startGame(daily, raid = false){
   updateStreak();
   state = 'play';
   PC = CHARS[charId];
+  $('ultLabel').textContent = 'L · ' + (PC.weapon?.id === 'dual' ? '燎原乱舞' : PC.weapon?.id === 'odachi' ? '霜断领域' : '千刃一闪');
   score = 0; wave = raidMode ? 4 : 0; kills = 0; combo = 0; maxCombo = 0; perfects = 0; ults = 0; bossKills = 0;
   ult = 0; ultFiring = 0; lifestealCnt = 0; lbSubmitted = false; pdCD = 0; shieldT = 0;
   resetST(); owned = [];
@@ -391,8 +403,9 @@ function startGame(daily, raid = false){
   P.x = W/2; P.y = H/2; P.vx = P.vy = 0;
   P.maxHp = (MUT.hp3 ? 3 : PC.hp) + (stats.meta.hp || 0);
   P.hp = P.maxHp; P.spd = PC.spd;
-  P.atkStage = 0; P.atkT = 0; P.inv = 0; P.dashT = 0; P.dashCD = 0; P.trail = [];
-  enemies = []; particles = []; slashes = []; floats = []; spawnQ = []; rings = []; ultLines = []; blades = []; eshots = [];
+  P.atkStage = 0; P.atkT = 0; P.inv = 0; P.dashT = 0; P.dashCD = 0; P.trail = []; P.dashStrikeT = 0;
+  dashStrikeActive = false; pdCritReady = false;
+  enemies = []; particles = []; slashes = []; floats = []; spawnQ = []; rings = []; ultLines = []; ultEvents = []; blades = []; eshots = [];
   explosionsQ = []; pulses = []; healFx = [];
   boss = null;
   $('menuScr').classList.add('hide');
@@ -430,7 +443,7 @@ function returnToMenu(){
   dailyMode = false;
   boss = null;
   runNemesis = null;
-  enemies = []; particles = []; slashes = []; floats = []; spawnQ = []; rings = []; ultLines = []; blades = []; eshots = [];
+  enemies = []; particles = []; slashes = []; floats = []; spawnQ = []; rings = []; ultLines = []; ultEvents = []; blades = []; eshots = [];
   explosionsQ = []; pulses = []; healFx = [];
   combo = 0; comboT = 0; ultFiring = 0; hitstop = 0; slowmo = 0; wt = 0; shake = 0; flashA = 0;
   $('mutEl').textContent = '';
@@ -468,7 +481,7 @@ function nextWave(){
 
 function showUpgrades(){
   state = 'upgrade';
-  const pool = PERKS.filter(p => !(p.once && owned.includes(p.id)));
+  const pool = PERKS.filter(p => !(p.once && owned.includes(p.id)) && !(p.chars && !p.chars.includes(charId)));
   const picks = [];
   for (let i = 0; i < 3 && pool.length; i++){
     const roll = Math.random();
@@ -554,7 +567,8 @@ function spawnBoss(){
 function rollDmg(base){
   let dmg = base + MUT.dmg + (ST.rage && combo >= 20 ? 1 : 0);
   let crit = false;
-  if (Math.random() < ST.crit){ dmg *= 2; crit = true; }
+  if (pdCritReady){ dmg *= 2; crit = true; pdCritReady = false; }
+  else if (Math.random() < ST.crit){ dmg *= 2; crit = true; }
   return { dmg, crit };
 }
 function gainUlt(n){
@@ -580,8 +594,13 @@ function hitEnemy(i, dmg, ka, kbF, crit){
     } else sfx('hit');
     return false;
   }
+  if (ST.shatter && e.slowT > 0){
+    dmg += 1;
+    floats.push({ x:e.x, y:e.y - 36, txt:'冰碎!', t:0, col:'#7ee0ff' });
+  }
   e.hp -= dmg;
   e.flash = 0.12;
+  floats.push({ x:e.x + rnd(-10, 10), y:e.y - 14, txt:String(dmg), t:0, col:crit ? '#ff5e3a' : '#cfd6e4', dmg:!crit });
   e.vx += Math.cos(ka) * kbF; e.vy += Math.sin(ka) * kbF;
   if (e.hp > 0 && ST.exec && e.maxHp >= 3 && e.hp <= e.maxHp / 3){
     e.hp = 0;
@@ -592,7 +611,8 @@ function hitEnemy(i, dmg, ka, kbF, crit){
   return false;
 }
 function doAttack(){
-  const st = PC.slash[P.atkStage];
+  const wid = PC.weapon?.id || 'iaido';
+  const st = dashStrikeActive ? DASH_STRIKES[wid] : PC.slash[P.atkStage];
   const range = st.range * ST.range;
   let best = null, bd = 1e9;
   const all = boss ? enemies.concat([boss]) : enemies;
@@ -606,22 +626,31 @@ function doAttack(){
   }
   if (best !== null) P.face += angDiff(P.face, best) * 0.65;
 
-  const attack = createWeaponAttack({ character: PC, stage: P.atkStage, baseSlash: st, face: P.face, range });
+  const attack = dashStrikeActive
+    ? createDashStrikeAttack(wid, P.face, range)
+    : createWeaponAttack({ character: PC, stage: P.atkStage, baseSlash: st, face: P.face, range });
   sfx('swing');
+  if (dashStrikeActive){
+    floats.push({ x:P.x, y:P.y - 44, txt:st.nm + '!', t:0, col:PC.col, big:true });
+    rings.push({ x:P.x, y:P.y, r:P.r, max:110, a:1, col:PC.col });
+    flashA = Math.max(flashA, 0.14);
+  }
   attack.hitArcs.forEach((arc, idx) => {
     slashes.push({
-      x:P.x, y:P.y, a:arc.angle, t:0, dur:st.dur / ST.aspd,
-      range:arc.range, half:arc.half, stage:P.atkStage,
-      flip:(P.atkStage + idx) % 2 === 1, rgb:PC.rgb, weapon:attack.visual
+      x:P.x, y:P.y, a:arc.angle, t:0, dur:st.dur / aspdNow(),
+      range:arc.range, half:arc.half, stage:dashStrikeActive ? 2 : P.atkStage,
+      flip:(P.atkStage + idx) % 2 === 1, rgb:PC.rgb, weapon:attack.visual, sub:idx > 0
     });
   });
+  burst(P.x + Math.cos(P.face) * range * 0.7, P.y + Math.sin(P.face) * range * 0.7, PC.col, dashStrikeActive ? 8 : 3, P.face);
   if (attack.movementBoost){ P.vx += Math.cos(P.face) * attack.movementBoost; P.vy += Math.sin(P.face) * attack.movementBoost; }
+  if (attack.invuln) P.inv = Math.max(P.inv, attack.invuln);
   if (ST.wave > 0){
     blades.push({ x:P.x + Math.cos(P.face) * 30, y:P.y + Math.sin(P.face) * 30, a:P.face, t:0, life:0.55, pierce:ST.wave, hitset:new Set() });
   }
 
   let hitAny = false, killAny = false, critAny = false;
-  const baseDmg = st.dmg + (P.atkStage === 2 ? ST.heavy : 0);
+  const baseDmg = st.dmg + (dashStrikeActive ? ST.dashDmg : (P.atkStage === 2 ? ST.heavy : 0));
   const kbm = MUT.kb * ST.kbMul;
   for (let i = enemies.length - 1; i >= 0; i--){
     const e = enemies[i];
@@ -635,7 +664,7 @@ function doAttack(){
       applyStatus(e);
       const ka = Math.atan2(dy, dx);
       burst(e.x, e.y, e.col, roll.crit ? 14 : 8, ka);
-      gainUlt(4);
+      gainUlt(3);
       if (hitEnemy(i, roll.dmg, ka, st.kb * kbm, roll.crit)) killAny = true;
     }
   }
@@ -735,8 +764,18 @@ function killEnemy(i, ka){
   stats.totalKills++;
   if (stats.totalKills >= 100) achEarned('k100');
   sfx('kill');
-  burst(e.x, e.y, e.col, e.elite ? 32 : 20, ka, true);
-  rings.push({ x:e.x, y:e.y, r:e.r, max:e.r + (e.elite ? 80 : 50), a:1, col:e.col });
+  burst(e.x, e.y, e.col, e.elite ? 32 : (combo >= 15 ? 28 : 20), ka, true);
+  rings.push({ x:e.x, y:e.y, r:e.r, max:e.r + (e.elite ? 80 : combo >= 15 ? 66 : 50), a:1, col:e.col });
+  if (ST.burnSpread && e.burnT > 0){
+    for (const e2 of enemies){
+      if (e2.warmup > 0) continue;
+      if (Math.hypot(e2.x - e.x, e2.y - e.y) < 130 + e2.r){
+        e2.burnT = Math.max(e2.burnT, 1.2);
+        burst(e2.x, e2.y, '#ff7a3c', 4, 0);
+      }
+    }
+    rings.push({ x:e.x, y:e.y, r:e.r, max:130, a:0.8, col:'#ff7a3c' });
+  }
   addCombo();
   const pts = Math.floor(e.score * multOf() * MUT.sc);
   score += pts;
@@ -804,6 +843,8 @@ function tryDash(){
   const l = Math.hypot(dx, dy);
   P.dvx = dx/l; P.dvy = dy/l;
   P.dashT = 0.16; P.dashCD = 0.55 * ST.dashCD; P.inv = Math.max(P.inv, 0.24);
+  P.atkT = 0; P.atkStage = 0; P.atkCool = 0;   // 闪避取消攻击后摇
+  P.dashStrikeT = 0.38;                          // 冲刺斩窗口
   sfx('dash');
   burst(P.x, P.y, PC.col, 6, Math.atan2(-dy, -dx));
   if (pdCD <= 0){
@@ -819,6 +860,7 @@ function tryDash(){
 function perfectDodge(){
   wt = ST.wtPlus ? 1.9 : 1.3;
   pdCD = ST.wtPlus ? 1.5 : 3;
+  if (ST.pdCrit){ pdCritReady = true; floats.push({ x:P.x, y:P.y - 64, txt:'残心', t:0, col:'#ffd23f' }); }
   P.dashCD = 0;
   perfects++;
   if (perfects >= 5) achEarned('p5');
@@ -894,16 +936,19 @@ function tryUlt(){
         grow:2
       });
     }
-    for (const delay of [90, 260]){
-      setTimeout(() => {
+    const ox = P.x, oy = P.y;
+    for (const [delay, radius] of [[0.09, 340], [0.26, 480]]){
+      ultEvents.push({ t: delay, run: () => {
         for (let i = enemies.length - 1; i >= 0; i--){
           const e = enemies[i];
-          const ka = Math.atan2(e.y - P.y, e.x - P.x);
+          if (Math.hypot(e.x - ox, e.y - oy) > radius + e.r) continue;
+          const ka = Math.atan2(e.y - oy, e.x - ox);
           strikeEnemyWithUlt(i, 4, ka, { burn:1.8, knock:320, col:'#ff7a3c', particles:14 });
         }
-        if (boss && boss.warmup <= 0) strikeBossWithUlt(5, Math.atan2(boss.y - P.y, boss.x - P.x), { col:'#ff7a3c', particles:26, knock:80 });
+        if (boss && boss.warmup <= 0 && Math.hypot(boss.x - ox, boss.y - oy) <= radius + boss.r)
+          strikeBossWithUlt(5, Math.atan2(boss.y - oy, boss.x - ox), { col:'#ff7a3c', particles:26, knock:80 });
         shake = Math.max(shake, 18);
-      }, delay);
+      } });
     }
     return;
   }
@@ -926,16 +971,33 @@ function tryUlt(){
         grow:5
       });
     }
-    setTimeout(() => {
+    const ox = P.x, oy = P.y;
+    // 领域：全场减速；伤害只结算 8 条贯穿线附近的目标
+    const nearLine = (x, y, r) => {
+      const px = x - ox, py = y - oy;
+      for (let i = 0; i < 8; i++){
+        const a = i / 8 * TAU + 0.1;
+        if (Math.abs(-Math.sin(a) * px + Math.cos(a) * py) < 40 + r) return true;
+      }
+      return false;
+    };
+    ultEvents.push({ t: 0.18, run: () => {
       for (let i = enemies.length - 1; i >= 0; i--){
         const e = enemies[i];
-        const ka = Math.atan2(e.y - P.y, e.x - P.x);
+        if (e.warmup > 0) continue;
+        e.slowT = Math.max(e.slowT || 0, 3.5);
+        if (!nearLine(e.x, e.y, e.r)) continue;
+        const ka = Math.atan2(e.y - oy, e.x - ox);
         strikeEnemyWithUlt(i, 9, ka, { slow:3.5, knock:560, col:'#b9a8ff', particles:18, deathBurst:true });
       }
-      if (boss && boss.warmup <= 0) strikeBossWithUlt(12, Math.atan2(boss.y - P.y, boss.x - P.x), { col:'#b9a8ff', particles:34, knock:180 });
+      if (boss && boss.warmup <= 0){
+        boss.slowT = Math.max(boss.slowT || 0, 3.5);
+        if (nearLine(boss.x, boss.y, boss.r))
+          strikeBossWithUlt(12, Math.atan2(boss.y - oy, boss.x - ox), { col:'#b9a8ff', particles:34, knock:180 });
+      }
       wt = Math.max(wt, 0.75);
       shake = Math.max(shake, 24);
-    }, 180);
+    } });
     return;
   }
 
@@ -959,15 +1021,22 @@ function tryUlt(){
       grow:i === 4 ? 7 : 3
     });
   }
-  setTimeout(() => {
+  const ox = P.x, oy = P.y, ua = P.face;
+  // 方向技：只斩面朝扇形内的目标，纵深不限
+  ultEvents.push({ t: 0.16, run: () => {
     for (let i = enemies.length - 1; i >= 0; i--){
       const e = enemies[i];
-      const ka = Math.atan2(e.y - P.y, e.x - P.x);
-      strikeEnemyWithUlt(i, 8, ka, { knock:460, col:'#9eeaff', particles:16, deathBurst:true });
+      const ka = Math.atan2(e.y - oy, e.x - ox);
+      if (Math.abs(angDiff(ua, ka)) > 0.55) continue;
+      strikeEnemyWithUlt(i, 12, ka, { knock:460, col:'#9eeaff', particles:16, deathBurst:true });
     }
-    if (boss && boss.warmup <= 0) strikeBossWithUlt(10, Math.atan2(boss.y - P.y, boss.x - P.x), { col:'#9eeaff', particles:30, knock:130, deathBurst:true });
+    if (boss && boss.warmup <= 0){
+      const ka = Math.atan2(boss.y - oy, boss.x - ox);
+      if (Math.abs(angDiff(ua, ka)) <= 0.55)
+        strikeBossWithUlt(14, ka, { col:'#9eeaff', particles:30, knock:130, deathBurst:true });
+    }
     shake = Math.max(shake, 20);
-  }, 160);
+  } });
 }
 
 // ---------- 粒子 ----------
@@ -1009,7 +1078,7 @@ function hurtPlayer(kb, ka, srcType){
     return;
   }
   buildHearts();
-  P.inv = 1.1;
+  P.inv = 0.9;
   P.vx += Math.cos(ka)*kb; P.vy += Math.sin(ka)*kb;
   sfx('hurt');
   shake = 20; hitstop = 0.1;
@@ -1115,6 +1184,7 @@ $('submitBtn').onclick = async () => {
 
 // ---------- 更新 ----------
 function update(dt){
+  if (hitstop > 0.3) hitstop = 0.3;
   if (hitstop > 0){ hitstop -= dt; timeScale = 0.02; }
   else if (wt > 0){ wt -= dt; timeScale = lerp(timeScale, 0.25, 0.3); if (wt <= 0) $('wtFx').style.opacity = 0; }
   else if (slowmo > 0){ slowmo -= dt; timeScale = lerp(timeScale, 0.35, 0.2); }
@@ -1123,6 +1193,10 @@ function update(dt){
   const pd = (wt > 0 && hitstop <= 0) ? dt * 0.85 : d;
 
   ultFiring = Math.max(0, ultFiring - dt);
+  for (let i = ultEvents.length - 1; i >= 0; i--){
+    ultEvents[i].t -= dt;
+    if (ultEvents[i].t <= 0) ultEvents.splice(i, 1)[0].run();
+  }
   pdCD -= dt;
   shieldT -= dt;
   comboT -= d;
@@ -1137,27 +1211,38 @@ function update(dt){
     P.x += P.dvx * 950 * pd; P.y += P.dvy * 950 * pd;
     P.trail.push({ x:P.x, y:P.y, a:Math.atan2(P.dvy, P.dvx), t:0.3 });
   } else {
-    const atkSlow = P.atkT > 0 ? 0.35 : 1;
+    const atkSlow = P.atkT > 0 ? 0.6 : 1;
     const sp = P.spd * ST.spd * atkSlow;
     P.vx = lerp(P.vx, mx * sp, 1 - Math.pow(0.0001, pd));
     P.vy = lerp(P.vy, my * sp, 1 - Math.pow(0.0001, pd));
     P.x += P.vx * pd; P.y += P.vy * pd;
     if (mx || my) P.face = lerp(P.face, P.face + angDiff(P.face, Math.atan2(my, mx)), 0.35);
   }
-  P.dashCD -= pd; P.inv -= pd;
+  P.dashCD -= pd; P.inv -= pd; P.dashStrikeT -= pd;
   P.x = clamp(P.x, 20, W - 20); P.y = clamp(P.y, 20, H - 20);
   for (let i = P.trail.length - 1; i >= 0; i--){ P.trail[i].t -= d; if (P.trail[i].t <= 0) P.trail.splice(i, 1); }
 
   if (P.atkT > 0){
     P.atkT -= pd;
     if (P.atkT <= 0){
-      if (P.atkBuf && P.atkStage < 2){ P.atkStage++; P.atkBuf = false; P.atkT = PC.slash[P.atkStage].dur / ST.aspd; doAttack(); }
+      if (P.atkBuf && P.atkStage < 2){ P.atkStage++; P.atkBuf = false; P.atkT = PC.slash[P.atkStage].dur / aspdNow(); doAttack(); }
       else { P.atkStage = 0; P.atkCool = 0.12; }
     }
   } else {
     P.atkCool -= pd;
     if (P.atkBuf && P.atkCool <= 0){
-      P.atkBuf = false; P.atkStage = 0; P.atkT = PC.slash[0].dur / ST.aspd; doAttack();
+      P.atkBuf = false; P.atkStage = 0;
+      if (P.dashStrikeT > 0){
+        P.dashStrikeT = 0;
+        dashStrikeActive = true;
+        const wid = PC.weapon?.id || 'iaido';
+        P.atkT = DASH_STRIKES[wid].dur / aspdNow();
+        doAttack();
+        dashStrikeActive = false;
+      } else {
+        P.atkT = PC.slash[0].dur / aspdNow();
+        doAttack();
+      }
     } else if (P.atkBuf && P.atkCool > 0.2) P.atkBuf = false;
   }
 
@@ -1262,7 +1347,7 @@ function update(dt){
   if (!spawnQ.length && (enemies.length || boss) && waveSpawnT > waveEndT + 18 && state === 'play'){
     if (!stallWarned){ stallWarned = true; stallT = 0.5; toast('⚠ 歼灭催促 · 猎杀者已被释放'); banner('⚠ 猎 杀 者 ⚠'); }
     stallT -= d;
-    if (stallT <= 0){ stallT = 2.8; spawnHunter(); }
+    if (stallT <= 0){ stallT = 2.0; spawnHunter(); }
   }
   if (!spawnQ.length && !enemies.length && !boss && !waveDone && state === 'play'){
     waveDone = true; slowmo = 0.8;
@@ -1565,12 +1650,31 @@ function crescent(x, y, r1, r0, a0, a1){
 
 function drawSlash(s){
   const pr = clamp(s.t / s.dur, 0, 1);
+  const fade = 1 - pr * pr;
+  if (s.weapon === 'iaido' && s.stage === 2){
+    // 突进一闪：直线剑光沿冲刺方向
+    const x2 = s.x + Math.cos(s.a) * s.range, y2 = s.y + Math.sin(s.a) * s.range;
+    ctx.save();
+    ctx.globalAlpha = fade;
+    ctx.lineCap = 'round';
+    ctx.strokeStyle = `rgba(${s.rgb},0.4)`;
+    ctx.lineWidth = 16 * (1 - pr);
+    ctx.beginPath(); ctx.moveTo(s.x, s.y); ctx.lineTo(x2, y2); ctx.stroke();
+    ctx.shadowColor = `rgb(${s.rgb})`; ctx.shadowBlur = 24;
+    ctx.strokeStyle = 'rgba(255,255,255,0.95)';
+    ctx.lineWidth = 5 * (1 - pr * 0.5);
+    ctx.beginPath(); ctx.moveTo(s.x, s.y); ctx.lineTo(x2, y2); ctx.stroke();
+    ctx.restore();
+    ctx.globalAlpha = 1;
+    return;
+  }
+  const subDim = s.sub ? 0.6 : 1;
+  const odachi = s.weapon === 'odachi';
   const ease = 1 - Math.pow(1 - pr, 3);
   const sweep = s.half * 2;
   const from = s.flip ? s.a + s.half : s.a - s.half;
   const dir = s.flip ? -1 : 1;
   const cur = from + dir * sweep * ease;
-  const fade = 1 - pr * pr;
   const heavy = s.stage === 2;
   const rgb = heavy ? '255,210,63' : s.rgb;
   const R = s.range;
@@ -1581,18 +1685,18 @@ function drawSlash(s){
     const f = i / LAYERS;
     const a1 = cur - trailLen * f;
     const a0 = cur - trailLen * (f + 1 / LAYERS) * 1.08;
-    ctx.fillStyle = `rgba(${rgb},${(0.32 - f * 0.055) * fade})`;
+    ctx.fillStyle = `rgba(${rgb},${(0.32 - f * 0.055) * fade * subDim})`;
     crescent(s.x, s.y, R * (1 - f * 0.04), R0 + (R - R0) * f * 0.35, a0, a1);
     ctx.fill();
   }
-  ctx.fillStyle = `rgba(255,255,255,${0.1 * fade})`;
+  ctx.fillStyle = `rgba(255,255,255,${0.1 * fade * subDim})`;
   crescent(s.x, s.y, R * 0.99, R * 0.86, cur - trailLen * 0.55, cur);
   ctx.fill();
   ctx.save();
   ctx.shadowColor = `rgb(${rgb})`;
-  ctx.shadowBlur = heavy ? 22 : 16;
-  ctx.strokeStyle = `rgba(255,255,255,${0.95 * fade})`;
-  ctx.lineWidth = heavy ? 4 : 3;
+  ctx.shadowBlur = (heavy ? 22 : 16) + (odachi ? 6 : 0);
+  ctx.strokeStyle = `rgba(255,255,255,${0.95 * fade * subDim})`;
+  ctx.lineWidth = (heavy ? 4 : 3) + (odachi ? 1 : 0) - (s.sub ? 1 : 0);
   ctx.lineCap = 'round';
   ctx.beginPath();
   ctx.moveTo(s.x + Math.cos(cur) * R0, s.y + Math.sin(cur) * R0);
@@ -1618,10 +1722,17 @@ function drawPlayerAvatar(){
     ctx.stroke();
   }
 
+  const comboGlow = combo >= 20 ? 18 : combo >= 10 ? 9 : 0;
+  if (combo >= 10){
+    ctx.strokeStyle = combo >= 20 ? 'rgba(255,210,63,.5)' : `rgba(${PC.rgb},.4)`;
+    ctx.lineWidth = 1.5;
+    poly(P.x, P.y, P.r + 9 + Math.sin(performance.now()/120) * 2, 3, performance.now()/400);
+    ctx.stroke();
+  }
   ctx.save();
   ctx.translate(P.x, P.y);
   ctx.rotate(P.face);
-  ctx.shadowColor = PC.col; ctx.shadowBlur = 18;
+  ctx.shadowColor = combo >= 20 ? '#ffd23f' : PC.col; ctx.shadowBlur = 18 + comboGlow;
   ctx.fillStyle = PC.col;
   poly(0, 0, P.r + 4, 3, 0);
   ctx.fill();
@@ -1684,6 +1795,35 @@ function draw(){
     ctx.shadowColor = '#6ee07a'; ctx.shadowBlur = 14;
     ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, TAU); ctx.stroke();
     ctx.shadowBlur = 0;
+    ctx.globalAlpha = 1;
+  }
+
+  // Boss 预警
+  if (boss && boss.warmup <= 0 && boss.kind === 'bulwark' && boss.st === 'tele'){
+    const urgency = 1 - clamp(boss.stT / 0.8, 0, 1);
+    ctx.save();
+    ctx.globalAlpha = 0.35 + urgency * 0.45;
+    ctx.strokeStyle = boss.col;
+    ctx.lineWidth = 3 + urgency * 3;
+    ctx.setLineDash([10, 8]);
+    ctx.beginPath();
+    ctx.moveTo(boss.x, boss.y);
+    ctx.lineTo(boss.x + boss.cx * 640, boss.y + boss.cy * 640);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.restore();
+    ctx.globalAlpha = 1;
+  }
+  if (boss && boss.warmup <= 0 && boss.kind === 'prism' && boss.st === 'blink'){
+    const urgency = 1 - clamp(boss.stT / 0.6, 0, 1);
+    ctx.save();
+    ctx.globalAlpha = 0.3 + urgency * 0.5;
+    ctx.strokeStyle = '#ff3b5c';
+    ctx.lineWidth = 2 + urgency * 2;
+    ctx.setLineDash([6, 6]);
+    ctx.beginPath(); ctx.arc(boss.tx, boss.ty, boss.r + 26 - urgency * 14, 0, TAU); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.restore();
     ctx.globalAlpha = 1;
   }
 
@@ -1903,7 +2043,7 @@ function draw(){
   for (const f of floats){
     ctx.globalAlpha = 1 - f.t;
     ctx.fillStyle = f.col;
-    ctx.font = (f.big ? 'bold 26px' : 'bold 15px') + ' Courier New';
+    ctx.font = (f.big ? 'bold 26px' : f.dmg ? 'bold 12px' : 'bold 15px') + ' Courier New';
     ctx.textAlign = 'center';
     ctx.fillText(f.txt, f.x, f.y);
   }

@@ -12,12 +12,106 @@ function weaponIdFor(character) {
 
 export function createWeaponAttack({ character, stage, baseSlash, face, range }) {
   const weaponId = weaponIdFor(character);
-  const baseArc = { angle: face, half: baseSlash.half, range, damageMul: 1 };
+
+  if (weaponId === 'iaido') {
+    // 居合刀：第三段是突进一闪 —— 窄长判定 + 前冲 + 短无敌帧
+    if (stage === 2) {
+      return {
+        weaponId,
+        visual: 'iaido',
+        movementBoost: 620,
+        invuln: 0.15,
+        hitArcs: [{ angle: face, half: 0.55, range: range * 1.6, damageMul: 1 }]
+      };
+    }
+    return {
+      weaponId,
+      visual: 'iaido',
+      movementBoost: 0,
+      hitArcs: [{ angle: face, half: baseSlash.half, range, damageMul: 1 }]
+    };
+  }
+
+  if (weaponId === 'dual') {
+    // 双短刃：每段都是双弧（主弧 + 背弧），第三段为两道对置半圆
+    if (stage === 2) {
+      return {
+        weaponId,
+        visual: 'dual',
+        movementBoost: 0,
+        hitArcs: [
+          { angle: face, half: 1.6, range, damageMul: 1 },
+          { angle: face + Math.PI, half: 1.6, range, damageMul: 1 }
+        ]
+      };
+    }
+    return {
+      weaponId,
+      visual: 'dual',
+      movementBoost: 0,
+      hitArcs: [
+        { angle: face, half: baseSlash.half, range, damageMul: 1 },
+        { angle: face + Math.PI, half: 0.95, range: range * 0.7, damageMul: 1 }
+      ]
+    };
+  }
+
+  if (weaponId === 'odachi') {
+    // 大太刀：宽弧重斩，第三段保留全周斩并附带震波
+    const attack = {
+      weaponId,
+      visual: 'odachi',
+      movementBoost: 0,
+      hitArcs: [{ angle: face, half: baseSlash.half, range, damageMul: 1 }]
+    };
+    if (stage === 2) {
+      attack.shockwave = { radius: 170, damage: 1, knockback: 460 };
+    }
+    return attack;
+  }
+
   return {
     weaponId,
     visual: 'base',
     movementBoost: 0,
-    hitArcs: [baseArc]
+    hitArcs: [{ angle: face, half: baseSlash.half, range, damageMul: 1 }]
+  };
+}
+
+// 冲刺斩：闪避后短窗口内攻击触发的角色专属突袭
+export const DASH_STRIKES = {
+  iaido:  { dur:.22, range:175, half:.5,      dmg:3, kb:620, hs:.08, nm:'瞬步斩' },
+  dual:   { dur:.2,  range:125, half:Math.PI, dmg:2, kb:520, hs:.06, nm:'焰轮回旋' },
+  odachi: { dur:.3,  range:150, half:Math.PI, dmg:2, kb:780, hs:.1,  nm:'碎地重斩' }
+};
+
+export function createDashStrikeAttack(weaponId, face, range) {
+  if (weaponId === 'dual') {
+    return {
+      weaponId,
+      visual: 'dual',
+      movementBoost: 0,
+      hitArcs: [
+        { angle: face, half: 1.6, range, damageMul: 1 },
+        { angle: face + Math.PI, half: 1.6, range, damageMul: 1 }
+      ]
+    };
+  }
+  if (weaponId === 'odachi') {
+    return {
+      weaponId,
+      visual: 'odachi',
+      movementBoost: 0,
+      hitArcs: [{ angle: face, half: Math.PI, range, damageMul: 1 }],
+      shockwave: { radius: 180, damage: 1, knockback: 540 }
+    };
+  }
+  return {
+    weaponId: 'iaido',
+    visual: 'iaido',
+    movementBoost: 560,
+    invuln: 0.12,
+    hitArcs: [{ angle: face, half: 0.5, range: range * 1.5, damageMul: 1 }]
   };
 }
 

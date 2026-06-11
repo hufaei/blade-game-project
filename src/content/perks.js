@@ -20,7 +20,11 @@ export function createDefaultSkillState() {
     shieldOn:false,
     exec:false,
     explode:false,
-    wtPlus:false
+    wtPlus:false,
+    dashDmg:0,
+    pdCrit:false,
+    burnSpread:false,
+    shatter:false
   };
 }
 
@@ -46,5 +50,9 @@ export function createPerks({ ST, P, buildHearts }) {
     { id:'revive', r:2, ic:'✚', nm:'不灭', ds:'致命伤害时免死一次\n并回复 3 点生命', f:()=>ST.revive=true, once:true },
     { id:'explode', r:2, ic:'✸', nm:'裂变', ds:'敌人死亡时 35% 几率爆炸\n波及周围敌人 可连锁', f:()=>ST.explode=true, once:true },
     { id:'wtime', r:2, ic:'⧖', nm:'时之刃', ds:'完美闪避冷却减半\n子弹时间延长', f:()=>ST.wtPlus=true, once:true },
+    { id:'dstrike', r:1, ic:'⟫', nm:'追猎本能', ds:'冲刺斩伤害 +1', f:()=>ST.dashDmg++ },
+    { id:'zanshin', r:2, ic:'✥', nm:'残心', ds:'完美闪避后\n下一击必定暴击', f:()=>ST.pdCrit=true, once:true, chars:['blade'] },
+    { id:'spread', r:2, ic:'♆', nm:'燎原', ds:'灼烧中的敌人死亡时\n火焰传染给附近敌人', f:()=>ST.burnSpread=true, once:true, chars:['ember'] },
+    { id:'shatter', r:2, ic:'❄', nm:'冰碎', ds:'对减速中的敌人\n伤害 +1', f:()=>ST.shatter=true, once:true, chars:['frost'] },
   ];
 }

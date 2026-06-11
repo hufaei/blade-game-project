@@ -2,7 +2,7 @@ export const CHARS = {
   blade: { nm:'斩 · BLADE', ic:'△', col:'#7ee0ff', rgb:'126,224,255', hp:6, spd:320,
     weapon:{ id:'iaido', name:'居合刀', feel:'锁定破绽 · 第三段突进一闪' },
     desc:'居合刀\n精准突进斩', unlock:null, stat:'HP 6 · 速度 ●●●',
-    slash:[{dur:.18,range:118,half:1.25,dmg:1,kb:460,hs:.045},{dur:.18,range:124,half:1.35,dmg:1,kb:520,hs:.05},{dur:.3,range:150,half:Math.PI,dmg:2,kb:760,hs:.09}] },
+    slash:[{dur:.18,range:118,half:1.25,dmg:1,kb:460,hs:.045},{dur:.18,range:124,half:1.35,dmg:1,kb:520,hs:.05},{dur:.3,range:150,half:Math.PI,dmg:3,kb:760,hs:.09}] },
   ember: { nm:'燹 · EMBER', ic:'▲', col:'#ff7a3c', rgb:'255,122,60', hp:5, spd:348, burn:true,
     weapon:{ id:'dual', name:'双短刃', feel:'双弧连斩 · 高速压制' },
     desc:'双短刃\n双弧连斩 点燃敌人', unlock:{ txt:'累计击杀 120 解锁', ok:s=>s.totalKills>=120, prog:s=>[Math.min(s.totalKills,120),120] }, stat:'HP 5 · 速度 ●●●●',

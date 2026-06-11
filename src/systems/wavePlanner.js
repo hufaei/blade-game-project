@@ -2,7 +2,7 @@ import { rnd } from '../core/math.js';
 
 export function buildWavePlan({ wave, more }) {
   if (wave % 5 === 0) {
-    const minions = 3 + Math.floor(wave/5) * 2;
+    const minions = 2 + Math.floor(wave/5);
     const spawnQueue = [];
     for (let i = 0; i < minions; i++) spawnQueue.push({ t: 2 + i * 1.6, type: 'swarm' });
 
@@ -13,7 +13,7 @@ export function buildWavePlan({ wave, more }) {
     };
   }
 
-  let budget = (5 + wave * 2.4) * more;
+  let budget = (6 + wave * 3.0) * more;
   let t = 0.6;
   const pool = [['chaser',2],['swarm',1]];
   if (wave >= 2) pool.push(['tank',4]);
@@ -36,7 +36,7 @@ export function buildWavePlan({ wave, more }) {
       spawnQueue.push({ t, type: pick[0] });
       budget -= pick[1];
     }
-    t += rnd(1.0, 2.2) * Math.max(0.55, 1 - wave * 0.04);
+    t += rnd(0.8, 1.9) * Math.max(0.45, 1 - wave * 0.05);
   }
 
   return {
