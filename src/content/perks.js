@@ -27,7 +27,8 @@ export function createDefaultSkillState() {
     shatter:false,
     orbit:0,
     seeker:0,
-    magnet:1
+    magnet:1,
+    parry:false
   };
 }
 
@@ -55,6 +56,7 @@ export function createPerks({ ST, P, buildHearts }) {
     { id:'wtime', r:2, ic:'⧖', nm:'时之刃', ds:'完美闪避冷却减半\n子弹时间延长', f:()=>ST.wtPlus=true, once:true },
     { id:'dstrike', r:1, ic:'⟫', nm:'追猎本能', ds:'冲刺斩伤害 +1', f:()=>ST.dashDmg++ },
     { id:'magnet', r:0, ic:'◉', nm:'磁石', ds:'经验拾取范围 +50%', f:()=>ST.magnet+=0.5 },
+    { id:'parry', r:1, ic:'⟁', nm:'拨刀', ds:'挥刀可以弹反\n敌方弹幕', f:()=>ST.parry=true, once:true },
     { id:'orbit', r:2, ic:'❂', nm:'环刃', ds:'获得一柄环绕飞刃\n持续切割靠近的敌人', f:()=>ST.orbit++ },
     { id:'seeker', r:2, ic:'➳', nm:'追猎飞镖', ds:'每 2 秒自动射出\n一枚追踪飞镖', f:()=>ST.seeker++ },
     { id:'zanshin', r:2, ic:'✥', nm:'残心', ds:'完美闪避后\n下一击必定暴击', f:()=>ST.pdCrit=true, once:true, chars:['blade'] },

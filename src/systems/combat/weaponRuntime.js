@@ -33,8 +33,8 @@ export function createWeaponAttack({ character, stage, baseSlash, face, range })
   }
 
   if (weaponId === 'dual') {
-    // 双短刃：每段都是双弧（主弧 + 背弧），第三段为两道对置半圆
-    if (stage === 2) {
+    // 双短刃：每段都是双弧（主弧 + 背弧），终结段为两道对置半圆旋斩
+    if (baseSlash.half >= 3) {
       return {
         weaponId,
         visual: 'dual',

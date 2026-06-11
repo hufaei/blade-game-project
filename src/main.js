@@ -343,6 +343,7 @@ let level = 1, xp = 0, pendingLevels = 0, gems = [], gemStreak = 0, gemStreakT =
 function xpNeed(){ return 10 + (level - 1) * 8; }
 // 自动武器 / Boss 危险区
 let orbitA = 0, seekT = 0, darts = [], firetrails = [], impacts = [];
+let icefields = [];   // 霜：冰封领域
 
 // ---------- 输入 ----------
 addEventListener('keydown', e => {
@@ -483,7 +484,7 @@ function startGame(daily, raid = false){
   enemies = []; particles = []; slashes = []; floats = []; spawnQ = []; rings = []; ultLines = []; ultEvents = []; blades = []; eshots = [];
   explosionsQ = []; pulses = []; healFx = [];
   level = 1; xp = 0; pendingLevels = 0; gems = []; gemStreak = 0; gemStreakT = 0;
-  orbitA = 0; seekT = 0; darts = []; firetrails = []; impacts = [];
+  orbitA = 0; seekT = 0; darts = []; firetrails = []; impacts = []; icefields = [];
   startMusic(); setMusicIntensity(0);
   boss = null;
   $('menuScr').classList.add('hide');
@@ -524,7 +525,7 @@ function returnToMenu(){
   runNemesis = null;
   enemies = []; particles = []; slashes = []; floats = []; spawnQ = []; rings = []; ultLines = []; ultEvents = []; blades = []; eshots = [];
   explosionsQ = []; pulses = []; healFx = [];
-  gems = []; darts = []; firetrails = []; impacts = [];
+  gems = []; darts = []; firetrails = []; impacts = []; icefields = [];
   combo = 0; comboT = 0; ultFiring = 0; hitstop = 0; slowmo = 0; wt = 0; shake = 0; flashA = 0;
   $('mutEl').textContent = '';
   $('hpEl').innerHTML = '';
@@ -696,6 +697,8 @@ function hitEnemy(i, dmg, ka, kbF, crit){
 function doAttack(){
   const wid = PC.weapon?.id || 'iaido';
   const st = dashStrikeActive ? DASH_STRIKES[wid] : PC.slash[P.atkStage];
+  const finalStage = !dashStrikeActive && P.atkStage === PC.slash.length - 1;
+  const heavy = dashStrikeActive || finalStage;
   const range = st.range * ST.range;
   let best = null, bd = 1e9;
   const all = boss ? enemies.concat([boss]) : enemies;
@@ -721,7 +724,7 @@ function doAttack(){
   attack.hitArcs.forEach((arc, idx) => {
     slashes.push({
       x:P.x, y:P.y, a:arc.angle, t:0, dur:st.dur / aspdNow(),
-      range:arc.range, half:arc.half, stage:dashStrikeActive ? 2 : P.atkStage,
+      range:arc.range, half:arc.half, stage:P.atkStage, heavy,
       flip:(P.atkStage + idx) % 2 === 1, rgb:PC.rgb, weapon:attack.visual, sub:idx > 0
     });
   });
@@ -732,8 +735,14 @@ function doAttack(){
     blades.push({ x:P.x + Math.cos(P.face) * 30, y:P.y + Math.sin(P.face) * 30, a:P.face, t:0, life:0.55, pierce:ST.wave, hitset:new Set() });
   }
 
+  // 霜：终结全周斩落下冰封领域
+  if (finalStage && wid === 'odachi'){
+    icefields.push({ x:P.x, y:P.y, r:155, t:0, life:2.6 });
+    rings.push({ x:P.x, y:P.y, r:30, max:155, a:0.9, col:'#b9a8ff' });
+  }
+
   let hitAny = false, killAny = false, critAny = false;
-  const baseDmg = st.dmg + (dashStrikeActive ? ST.dashDmg : (P.atkStage === 2 ? ST.heavy : 0));
+  const baseDmg = st.dmg + (dashStrikeActive ? ST.dashDmg : (finalStage ? ST.heavy : 0));
   const kbm = MUT.kb * ST.kbMul;
   for (let i = enemies.length - 1; i >= 0; i--){
     const e = enemies[i];
@@ -751,15 +760,16 @@ function doAttack(){
       if (hitEnemy(i, roll.dmg, ka, st.kb * kbm, roll.crit)) killAny = true;
     }
   }
-  for (let i = eshots.length - 1; i >= 0; i--){
-    const s2 = eshots[i];
-    const dx = s2.x - P.x, dy = s2.y - P.y, d = Math.hypot(dx, dy);
-    if (findHitArc(attack, P, { x:s2.x, y:s2.y, r:12 })){
-      eshots.splice(i, 1);
-      burst(s2.x, s2.y, '#e85d9e', 7, P.face);
-      gainUlt(3);
-      floats.push({ x:s2.x, y:s2.y - 14, txt:'弹反!', t:0, col:'#ff9ecb' });
-      sfx('parry');
+  if (ST.parry){   // 弹反为「拨刀」天赋专属
+    for (let i = eshots.length - 1; i >= 0; i--){
+      const s2 = eshots[i];
+      if (findHitArc(attack, P, { x:s2.x, y:s2.y, r:12 })){
+        eshots.splice(i, 1);
+        burst(s2.x, s2.y, '#e85d9e', 7, P.face);
+        gainUlt(3);
+        floats.push({ x:s2.x, y:s2.y - 14, txt:'弹反!', t:0, col:'#ff9ecb' });
+        sfx('parry');
+      }
     }
   }
   if (boss && boss.warmup <= 0){
@@ -810,7 +820,7 @@ function doAttack(){
       if (Math.hypot(dx, dy) < sr + boss.r) dmgBoss(attack.shockwave.damage, Math.atan2(dy, dx), attack.shockwave.knockback * 0.16);
     }
   }
-  if (hitAny && P.atkStage === 2 && ST.shock > 0){
+  if (hitAny && finalStage && ST.shock > 0){
     const sr = 190 + ST.shock * 30;
     rings.push({ x:P.x, y:P.y, r:30, max:sr, a:1, col:'#ffd23f' });
     for (let i = enemies.length - 1; i >= 0; i--){
@@ -826,7 +836,7 @@ function doAttack(){
     hitstop = Math.max(hitstop, killAny ? st.hs + 0.04 : st.hs);
     shake = Math.max(shake, killAny ? 13 : 8);
     if (critAny) shake = Math.max(shake, 15);
-    if (P.atkStage === 2){ flashA = Math.max(flashA, 0.18); shake = Math.max(shake, 16); }
+    if (finalStage){ flashA = Math.max(flashA, 0.18); shake = Math.max(shake, 16); }
   }
 }
 function dmgBoss(dmg, ka, kb){
@@ -1304,7 +1314,9 @@ function update(dt){
     P.x += P.dvx * 950 * pd; P.y += P.dvy * 950 * pd;
     P.trail.push({ x:P.x, y:P.y, a:Math.atan2(P.dvy, P.dvx), t:0.3 });
   } else {
-    const atkSlow = P.atkT > 0 ? 0.6 : 1;
+    // 攻击移速惩罚按武器分化：双刀走砍 / 居合标准 / 大太刀沉重
+    const wid2 = PC.weapon?.id || 'iaido';
+    const atkSlow = P.atkT > 0 ? (wid2 === 'dual' ? 0.85 : wid2 === 'odachi' ? 0.45 : 0.6) : 1;
     const sp = P.spd * ST.spd * atkSlow;
     P.vx = lerp(P.vx, mx * sp, 1 - Math.pow(0.0001, pd));
     P.vy = lerp(P.vy, my * sp, 1 - Math.pow(0.0001, pd));
@@ -1318,7 +1330,7 @@ function update(dt){
   if (P.atkT > 0){
     P.atkT -= pd;
     if (P.atkT <= 0){
-      if (P.atkBuf && P.atkStage < 2){ P.atkStage++; P.atkBuf = false; P.atkT = PC.slash[P.atkStage].dur / aspdNow(); doAttack(); }
+      if (P.atkBuf && P.atkStage < PC.slash.length - 1){ P.atkStage++; P.atkBuf = false; P.atkT = PC.slash[P.atkStage].dur / aspdNow(); doAttack(); }
       else { P.atkStage = 0; P.atkCool = 0.12; }
     }
   } else {
@@ -1450,6 +1462,19 @@ function update(dt){
       hitDone = true;
     }
     if (hitDone) darts.splice(i, 1);
+  }
+
+  // 冰封领域：范围内敌人持续减速
+  for (let i = icefields.length - 1; i >= 0; i--){
+    const ic = icefields[i];
+    ic.t += d;
+    if (ic.t >= ic.life){ icefields.splice(i, 1); continue; }
+    for (const e of enemies){
+      if (e.warmup > 0) continue;
+      if (Math.hypot(e.x - ic.x, e.y - ic.y) < ic.r + e.r) e.slowT = Math.max(e.slowT || 0, 0.35);
+    }
+    if (boss && boss.warmup <= 0 && Math.hypot(boss.x - ic.x, boss.y - ic.y) < ic.r + boss.r)
+      boss.slowT = Math.max(boss.slowT || 0, 0.3);
   }
 
   // 收割者焰痕
@@ -1966,7 +1991,7 @@ function update(dt){
           vx:Math.cos(cur + dir * 1.57) * rnd(80, 300) + rnd(-60, 60),
           vy:Math.sin(cur + dir * 1.57) * rnd(80, 300) + rnd(-60, 60),
           life:rnd(0.12, 0.3), t:0,
-          col: s.stage === 2 ? '#ffd23f' : '#' + (s.rgb === '126,224,255' ? '9eeaff' : s.rgb === '255,122,60' ? 'ffae6e' : 'd6c9ff'),
+          col: s.heavy ? '#ffd23f' : '#' + (s.rgb === '126,224,255' ? '9eeaff' : s.rgb === '255,122,60' ? 'ffae6e' : 'd6c9ff'),
           sz:rnd(1.5, 3.5), rot:cur, vr:rnd(-20, 20)
         });
       }
@@ -2044,7 +2069,7 @@ function crescent(x, y, r1, r0, a0, a1){
 function drawSlash(s){
   const pr = clamp(s.t / s.dur, 0, 1);
   const fade = 1 - pr * pr;
-  if (s.weapon === 'iaido' && s.stage === 2){
+  if (s.weapon === 'iaido' && s.heavy){
     // 突进一闪：直线剑光沿冲刺方向
     const x2 = s.x + Math.cos(s.a) * s.range, y2 = s.y + Math.sin(s.a) * s.range;
     ctx.save();
@@ -2068,7 +2093,7 @@ function drawSlash(s){
   const from = s.flip ? s.a + s.half : s.a - s.half;
   const dir = s.flip ? -1 : 1;
   const cur = from + dir * sweep * ease;
-  const heavy = s.stage === 2;
+  const heavy = !!s.heavy;
   const rgb = heavy ? '255,210,63' : s.rgb;
   const R = s.range;
   const R0 = R * (heavy ? 0.38 : 0.5);
@@ -2178,6 +2203,21 @@ function draw(){
       ctx.fillText('W' + gv.w + ' · 斩碑复仇', gv.x, gv.y + 40);
       ctx.globalAlpha = 1;
     }
+  }
+
+  // 冰封领域
+  for (const ic of icefields){
+    const a = Math.min(1, (ic.life - ic.t) / 0.5);
+    ctx.globalAlpha = 0.10 * a;
+    ctx.fillStyle = '#b9a8ff';
+    ctx.beginPath(); ctx.arc(ic.x, ic.y, ic.r, 0, TAU); ctx.fill();
+    ctx.globalAlpha = 0.45 * a;
+    ctx.strokeStyle = '#b9a8ff';
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([6, 8]);
+    ctx.beginPath(); ctx.arc(ic.x, ic.y, ic.r, performance.now()/1400, performance.now()/1400 + TAU); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.globalAlpha = 1;
   }
 
   // 经验宝石
