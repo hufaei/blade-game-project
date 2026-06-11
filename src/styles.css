@@ -152,6 +152,30 @@
   body.touch .perks { bottom:14px; left:12px; max-width:42vw; }
   body.touch .keys { display:none; }
 
+  /* ---------- 手机横屏 ---------- */
+  @media (orientation:landscape) and (max-height:500px){
+    body.touch .ult-wrap { bottom:14px; width:200px; }
+    body.touch .perks { bottom:10px; left:10px; max-width:30vw; }
+    .combo-box { top:60px; left:14px; }
+    .combo-n { font-size:28px; }
+    .hud { top:10px; left:14px; }
+    .score { font-size:18px; }
+    .hp { top:10px; right:14px; }
+    #tPause { top:52px; }
+    #tUlt { bottom:120px; }
+    .bossbar { top:34px; width:min(360px,46vw); }
+    .banner { font-size:22px; letter-spacing:7px; }
+    .screen { padding:12px 0 20px; }
+    h1 { font-size:24px; letter-spacing:6px; margin-bottom:2px; }
+    .sub { margin-bottom:8px; }
+    .chars { gap:8px; }
+    .char-card { width:152px; padding:10px 8px; }
+    .mission-box, .meta-box { width:min(540px,92vw); margin-bottom:8px; }
+    .btn { font-size:13px; padding:8px 22px; }
+    .cards { flex-direction:row; }
+    .card { width:min(200px,30vw); padding:14px 10px; }
+  }
+
   /* ---------- 窄屏适配 ---------- */
   @media (max-width:640px){
     h1 { font-size:32px; letter-spacing:8px; }

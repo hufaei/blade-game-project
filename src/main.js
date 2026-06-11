@@ -440,8 +440,18 @@ function updateStreak(){
   saveStats();
   if (stats.streak.n > 1) toast('🔥 连续征战 ' + stats.streak.n + ' 天');
 }
+async function enterLandscape(){
+  if (!IS_TOUCH) return;
+  try {
+    if (!document.fullscreenElement) await document.documentElement.requestFullscreen({ navigationUI:'hide' });
+  } catch(e){}
+  try { await screen.orientation.lock('landscape'); } catch(e){}
+  if (matchMedia('(orientation: portrait)').matches) toast('↻ 横屏体验更佳 · 请旋转设备');
+}
+
 function startGame(daily, raid = false){
   initAudio(); resumeAudio();
+  enterLandscape();
   ensureDailyProgression(stats, todayKey());
   runMissions = createRunMissions();
   lastMissionReward = { completed: [], shards: 0, mastery: null };
