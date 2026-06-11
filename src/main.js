@@ -344,6 +344,7 @@ function xpNeed(){ return 10 + (level - 1) * 8; }
 // 自动武器 / Boss 危险区
 let orbitA = 0, seekT = 0, darts = [], firetrails = [], impacts = [];
 let icefields = [];   // 霜：冰封领域
+let cutmarks = [];    // 斩：拔刀斩痕（路径命中的斩杀特效）
 
 // ---------- 输入 ----------
 addEventListener('keydown', e => {
@@ -484,7 +485,7 @@ function startGame(daily, raid = false){
   enemies = []; particles = []; slashes = []; floats = []; spawnQ = []; rings = []; ultLines = []; ultEvents = []; blades = []; eshots = [];
   explosionsQ = []; pulses = []; healFx = [];
   level = 1; xp = 0; pendingLevels = 0; gems = []; gemStreak = 0; gemStreakT = 0;
-  orbitA = 0; seekT = 0; darts = []; firetrails = []; impacts = []; icefields = [];
+  orbitA = 0; seekT = 0; darts = []; firetrails = []; impacts = []; icefields = []; cutmarks = [];
   startMusic(); setMusicIntensity(0);
   boss = null;
   $('menuScr').classList.add('hide');
@@ -523,7 +524,7 @@ function returnToMenu(){
   runNemesis = null;
   enemies = []; particles = []; slashes = []; floats = []; spawnQ = []; rings = []; ultLines = []; ultEvents = []; blades = []; eshots = [];
   explosionsQ = []; pulses = []; healFx = [];
-  gems = []; darts = []; firetrails = []; impacts = []; icefields = [];
+  gems = []; darts = []; firetrails = []; impacts = []; icefields = []; cutmarks = [];
   combo = 0; comboT = 0; ultFiring = 0; hitstop = 0; slowmo = 0; wt = 0; shake = 0; flashA = 0;
   $('mutEl').textContent = '';
   $('hpEl').innerHTML = '';
@@ -776,48 +777,102 @@ function doAttack(){
   let hitAny = false, killAny = false, critAny = false;
   const baseDmg = st.dmg + (dashStrikeActive ? ST.dashDmg : (finalStage ? ST.heavy : 0));
   const kbm = MUT.kb * ST.kbMul;
-  for (let i = enemies.length - 1; i >= 0; i--){
-    const e = enemies[i];
-    if (e.warmup > 0 || e.phased) continue;
-    const dx = e.x - P.x, dy = e.y - P.y, d = Math.hypot(dx, dy);
-    const arc = findHitArc(attack, P, e);
-    if (arc){
-      hitAny = true;
-      const roll = rollDmg(scaledDamage(baseDmg, arc));
-      if (roll.crit){ critAny = true; floats.push({ x:e.x, y:e.y - 26, txt:'暴击!', t:0, col:'#ff5e3a' }); }
-      applyStatus(e);
-      const ka = Math.atan2(dy, dx);
-      burst(e.x, e.y, e.col, roll.crit ? 14 : 8, ka);
-      gainUlt(3);
-      if (hitEnemy(i, roll.dmg, ka, st.kb * kbm, roll.crit)) killAny = true;
+
+  // 斩：拔刀瞬移斩 —— 沿斜向路径瞬移，路径上的目标全部吃斩击
+  let pathHit = null;
+  if (attack.dash){
+    // 位移：沿正前方直线瞬移
+    const sx = P.x, sy = P.y;
+    const ex = clamp(sx + Math.cos(P.face) * attack.dash.dist, 20, W - 20);
+    const ey = clamp(sy + Math.sin(P.face) * attack.dash.dist, 20, H - 20);
+    P.x = ex; P.y = ey;
+    P.vx = Math.cos(P.face) * 140; P.vy = Math.sin(P.face) * 140;
+    for (let i = 0; i <= 4; i++){ // 残影沿位移线
+      P.trail.push({ x: sx + (ex - sx) * i / 4, y: sy + (ey - sy) * i / 4, a: P.face, t: 0.14 + i * 0.04 });
     }
-  }
-  if (ST.parry){   // 弹反为「拨刀」天赋专属
-    for (let i = eshots.length - 1; i >= 0; i--){
-      const s2 = eshots[i];
-      if (findHitArc(attack, P, { x:s2.x, y:s2.y, r:12 })){
-        eshots.splice(i, 1);
-        burst(s2.x, s2.y, '#e85d9e', 7, P.face);
+    // 刀线：与位移不同线 —— 斜切横贯位移中点
+    const moveA = Math.atan2(ey - sy, ex - sx);
+    const ca = moveA + attack.dash.offset;
+    const mx = (sx + ex) / 2, my = (sy + ey) / 2;
+    const halfL = Math.hypot(ex - sx, ey - sy) * 0.5;
+    const cx1 = mx - Math.cos(ca) * halfL, cy1 = my - Math.sin(ca) * halfL;
+    const cx2 = mx + Math.cos(ca) * halfL, cy2 = my + Math.sin(ca) * halfL;
+    slashes.push({
+      weapon:'iaidash', x:cx1, y:cy1, x2:cx2, y2:cy2, a:ca, t:0,
+      dur: Math.max(st.dur / aspdNow(), 0.18), rgb:PC.rgb, heavy,
+      range:0, half:0, stage:P.atkStage, flip:false, sub:false
+    });
+    // 判定跟刀线走
+    const a2 = ca;
+    const dxs = cx2 - cx1, dys = cy2 - cy1;
+    const len2 = dxs * dxs + dys * dys || 1;
+    pathHit = (tx, ty, tr) => {
+      const tt = clamp(((tx - cx1) * dxs + (ty - cy1) * dys) / len2, 0, 1);
+      return Math.hypot(tx - (cx1 + dxs * tt), ty - (cy1 + dys * tt)) < tr + 26;
+    };
+    for (let i = enemies.length - 1; i >= 0; i--){
+      const e = enemies[i];
+      if (e.warmup > 0 || e.phased) continue;
+      if (!pathHit(e.x, e.y, e.r)) continue;
+      hitAny = true;
+      const roll = rollDmg(baseDmg);
+      if (roll.crit){ critAny = true; floats.push({ x:e.x, y:e.y - 26, txt:'暴击!', t:0, col:'#ff5e3a' }); }
+      cutmarks.push({ x:e.x, y:e.y, a:a2, len:e.r * 2 + 26, t:0 });
+      burst(e.x, e.y, e.col, roll.crit ? 12 : 7, a2);
+      gainUlt(3);
+      if (hitEnemy(i, roll.dmg, a2, st.kb * kbm, roll.crit)) killAny = true;
+    }
+    if (boss && boss.warmup <= 0 && pathHit(boss.x, boss.y, boss.r)){
+      hitAny = true;
+      const roll = rollDmg(baseDmg);
+      if (roll.crit){ critAny = true; floats.push({ x:boss.x, y:boss.y - 50, txt:'暴击!', t:0, col:'#ff5e3a' }); }
+      cutmarks.push({ x:boss.x, y:boss.y, a:a2, len:boss.r * 2 + 30, t:0 });
+      dmgBoss(roll.dmg, a2, st.kb * 0.18);
+    }
+  } else {
+    for (let i = enemies.length - 1; i >= 0; i--){
+      const e = enemies[i];
+      if (e.warmup > 0 || e.phased) continue;
+      const dx = e.x - P.x, dy = e.y - P.y, d = Math.hypot(dx, dy);
+      const arc = findHitArc(attack, P, e);
+      if (arc){
+        hitAny = true;
+        const roll = rollDmg(scaledDamage(baseDmg, arc));
+        if (roll.crit){ critAny = true; floats.push({ x:e.x, y:e.y - 26, txt:'暴击!', t:0, col:'#ff5e3a' }); }
+        applyStatus(e);
+        const ka = Math.atan2(dy, dx);
+        burst(e.x, e.y, e.col, roll.crit ? 14 : 8, ka);
         gainUlt(3);
-        floats.push({ x:s2.x, y:s2.y - 14, txt:'弹反!', t:0, col:'#ff9ecb' });
-        sfx('parry');
+        if (hitEnemy(i, roll.dmg, ka, st.kb * kbm, roll.crit)) killAny = true;
       }
     }
-  }
-  if (boss && boss.warmup <= 0){
-    const dx = boss.x - P.x, dy = boss.y - P.y, d = Math.hypot(dx, dy);
-    const arc = findHitArc(attack, P, boss);
-    if (arc){
-      hitAny = true;
-      const roll = rollDmg(scaledDamage(baseDmg, arc));
-      if (roll.crit){ critAny = true; floats.push({ x:boss.x, y:boss.y - 50, txt:'暴击!', t:0, col:'#ff5e3a' }); }
-      dmgBoss(roll.dmg, Math.atan2(dy, dx), st.kb * 0.18);
+    if (ST.parry){   // 弹反为「拨刀」天赋专属
+      for (let i = eshots.length - 1; i >= 0; i--){
+        const s2 = eshots[i];
+        if (findHitArc(attack, P, { x:s2.x, y:s2.y, r:12 })){
+          eshots.splice(i, 1);
+          burst(s2.x, s2.y, '#e85d9e', 7, P.face);
+          gainUlt(3);
+          floats.push({ x:s2.x, y:s2.y - 14, txt:'弹反!', t:0, col:'#ff9ecb' });
+          sfx('parry');
+        }
+      }
+    }
+    if (boss && boss.warmup <= 0){
+      const dx = boss.x - P.x, dy = boss.y - P.y, d = Math.hypot(dx, dy);
+      const arc = findHitArc(attack, P, boss);
+      if (arc){
+        hitAny = true;
+        const roll = rollDmg(scaledDamage(baseDmg, arc));
+        if (roll.crit){ critAny = true; floats.push({ x:boss.x, y:boss.y - 50, txt:'暴击!', t:0, col:'#ff5e3a' }); }
+        dmgBoss(roll.dmg, Math.atan2(dy, dx), st.kb * 0.18);
+      }
     }
   }
   for (const gv of gravesRun){
     if (gv.broken) continue;
     const dx = gv.x - P.x, dy = gv.y - P.y, d = Math.hypot(dx, dy);
-    if (findHitArc(attack, P, { x:gv.x, y:gv.y, r:16 })){
+    if (pathHit ? pathHit(gv.x, gv.y, 16) : findHitArc(attack, P, { x:gv.x, y:gv.y, r:16 })){
       gv.broken = true;
       burst(gv.x, gv.y, '#9aa3b8', 18, 0, true);
       rings.push({ x:gv.x, y:gv.y, r:10, max:80, a:1, col:'#9eeaff' });
@@ -1640,10 +1695,15 @@ function update(dt){
   for (let i = spawnQ.length - 1; i >= 0; i--){
     if (waveSpawnT >= spawnQ[i].t){ spawnEnemy(spawnQ[i].type); spawnQ.splice(i, 1); }
   }
-  if (!spawnQ.length && (enemies.length || boss) && waveSpawnT > waveEndT + 18 && state === 'play'){
-    if (!stallWarned){ stallWarned = true; stallT = 0.5; toast('⚠ 歼灭催促 · 猎杀者已被释放'); banner('⚠ 猎 杀 者 ⚠'); }
+  if (!spawnQ.length && (enemies.length || boss) && waveSpawnT > waveEndT + 9 && state === 'play'){
+    if (!stallWarned){
+      stallWarned = true; stallT = 0.5;
+      for (const e of enemies) e.spd *= 1.5;   // 残敌暴走冲向玩家，波次不再拖尾
+      toast('⚠ 歼灭催促 · 残敌暴走 · 猎杀者已被释放');
+      banner('⚠ 猎 杀 者 ⚠');
+    }
     stallT -= d;
-    if (stallT <= 0){ stallT = 2.0; spawnHunter(); }
+    if (stallT <= 0){ stallT = 0.5; spawnHunter(); }   // 高频投放：要么速死要么速清，不拖泥带水
   }
   if (!spawnQ.length && !enemies.length && !boss && !waveDone && state === 'play'){
     waveDone = true; slowmo = 0.8;
@@ -2008,7 +2068,7 @@ function update(dt){
   }
 
   for (const s of slashes){
-    if (s.weapon === 'dualx') continue;   // X 斩无扫弧轨迹粒子
+    if (s.weapon === 'dualx' || s.weapon === 'iaidash') continue;   // 直线轨迹类无扫弧粒子
     if (s.t < s.dur){
       const pr = s.t / s.dur;
       const ease = 1 - Math.pow(1 - pr, 3);
@@ -2057,6 +2117,10 @@ function update(dt){
   for (let i = healFx.length - 1; i >= 0; i--){
     healFx[i].t -= d;
     if (healFx[i].t <= 0) healFx.splice(i, 1);
+  }
+  for (let i = cutmarks.length - 1; i >= 0; i--){
+    cutmarks[i].t += d;
+    if (cutmarks[i].t >= 0.32) cutmarks.splice(i, 1);
   }
   for (let i = ultLines.length - 1; i >= 0; i--){
     ultLines[i].t -= dt;
@@ -2114,6 +2178,43 @@ function crescent(x, y, r1, r0, a0, a1){
 function drawSlash(s){
   const pr = clamp(s.t / s.dur, 0, 1);
   const fade = 1 - pr * pr;
+  if (s.weapon === 'iaidash'){
+    // 拔刀瞬移斩轨迹：快速拉出的锥形剑光，终结段更粗更亮
+    const lp = clamp(pr / 0.4, 0, 1);
+    const x2 = s.x + (s.x2 - s.x) * lp, y2 = s.y + (s.y2 - s.y) * lp;
+    const pxv = Math.cos(s.a + Math.PI / 2), pyv = Math.sin(s.a + Math.PI / 2);
+    const mx2 = (s.x + x2) / 2, my2 = (s.y + y2) / 2;
+    ctx.save();
+    ctx.lineCap = 'round';
+    // 底层淡residual光
+    ctx.globalAlpha = fade * 0.3;
+    ctx.strokeStyle = `rgba(${s.rgb},0.45)`;
+    ctx.lineWidth = (s.heavy ? 9 : 6) * (1 - pr * 0.5);
+    ctx.beginPath(); ctx.moveTo(s.x, s.y); ctx.lineTo(x2, y2); ctx.stroke();
+    // 锥形白刃
+    const w = (s.heavy ? 5 : 3.2) * (1 - pr * 0.4);
+    ctx.globalAlpha = fade;
+    ctx.shadowColor = `rgb(${s.rgb})`; ctx.shadowBlur = s.heavy ? 26 : 18;
+    ctx.fillStyle = 'rgba(255,255,255,0.95)';
+    ctx.beginPath();
+    ctx.moveTo(s.x, s.y);
+    ctx.lineTo(mx2 + pxv * w, my2 + pyv * w);
+    ctx.lineTo(x2, y2);
+    ctx.lineTo(mx2 - pxv * w, my2 - pyv * w);
+    ctx.closePath(); ctx.fill();
+    ctx.shadowBlur = 0;
+    // 拔刀瞬间的端点闪光
+    if (pr < 0.35){
+      ctx.globalAlpha = (1 - pr / 0.35) * 0.9;
+      ctx.fillStyle = '#fff';
+      ctx.shadowColor = `rgb(${s.rgb})`; ctx.shadowBlur = 20;
+      ctx.beginPath(); ctx.arc(s.x, s.y, 4 + (s.heavy ? 3 : 0), 0, TAU); ctx.fill();
+      ctx.shadowBlur = 0;
+    }
+    ctx.restore();
+    ctx.globalAlpha = 1;
+    return;
+  }
   if (s.weapon === 'dualx'){
     // X 斩：两道锥形刀刃交叉于身前，带超调入场、交点闪光与霓虹残影
     const cx = s.x + Math.cos(s.a) * s.range * 0.5;
@@ -2681,6 +2782,24 @@ function draw(){
   ctx.shadowBlur = 0;
 
   for (const s of slashes) drawSlash(s);
+
+  // 拔刀斩痕：被路径斩中的目标身上的白色刀痕
+  for (const c of cutmarks){
+    const cp = c.t / 0.32;
+    const halfL = c.len * (0.55 + 0.45 * cp) * 0.5;
+    const ca2 = Math.cos(c.a), sa2 = Math.sin(c.a);
+    ctx.globalAlpha = (1 - cp) * 0.95;
+    ctx.shadowColor = '#9eeaff'; ctx.shadowBlur = 14;
+    ctx.strokeStyle = '#fff';
+    ctx.lineWidth = 2.5 * (1 - cp * 0.5);
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(c.x - ca2 * halfL, c.y - sa2 * halfL);
+    ctx.lineTo(c.x + ca2 * halfL, c.y + sa2 * halfL);
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+  }
+  ctx.globalAlpha = 1;
 
   for (const l of ultLines){
     if (l.t > 0) continue;

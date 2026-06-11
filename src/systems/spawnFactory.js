@@ -63,8 +63,8 @@ export function markHunter(enemy) {
   enemy.spd *= 1.75;
   enemy.hunter = true;
   enemy.elite = false;
-  enemy.hp = 1;
-  enemy.maxHp = 1;
+  enemy.hp = 2;
+  enemy.maxHp = 2;
   enemy.score = 150;
   return enemy;
 }

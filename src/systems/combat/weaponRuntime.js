@@ -16,14 +16,16 @@ export function createWeaponAttack({ character, stage, baseSlash, face, range })
   const final = stage === ((character.slash ? character.slash.length : 3) - 1);
 
   if (weaponId === 'iaido') {
-    // 居合刀：终结段是突进一闪 —— 窄长判定 + 前冲 + 短无敌帧
+    // 居合刀：四段普通弧斩，终结段才是拔刀瞬移斩（直线穿阵）
     if (final) {
+      // 拔刀斜斩：人沿正前方瞬移，刀线斜切在位移中点（位移与刀线不同线）
       return {
         weaponId,
-        visual: 'iaido',
-        movementBoost: 620,
+        visual: 'iaidash',
+        movementBoost: 0,
         invuln: 0.15,
-        hitArcs: [{ angle: face, half: 0.55, range: range * 1.6, damageMul: 1 }]
+        dash: { dist: range * 1.55, offset: (Math.random() < 0.5 ? -1 : 1) * 0.42 },
+        hitArcs: []
       };
     }
     return {

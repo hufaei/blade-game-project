@@ -4,19 +4,31 @@ import assert from 'node:assert/strict';
 import { CHARS } from '../src/content/characters.js';
 import { createWeaponAttack } from '../src/systems/combat/weaponRuntime.js';
 
-test('blade stage three is a decisive iaido strike with forward commitment', () => {
-  const attack = createWeaponAttack({
+test('blade combo is four arc slashes capped by a teleport draw-cut', () => {
+  const finisher = createWeaponAttack({
     character: CHARS.blade,
-    stage: 2,
-    baseSlash: CHARS.blade.slash[2],
+    stage: CHARS.blade.slash.length - 1,
+    baseSlash: CHARS.blade.slash[CHARS.blade.slash.length - 1],
     face: 0,
     range: 150
   });
 
-  assert.equal(attack.weaponId, 'iaido');
-  assert.equal(attack.visual, 'iaido');
-  assert.equal(attack.hitArcs.length, 1);
-  assert.ok(attack.movementBoost > 220);
+  assert.equal(finisher.weaponId, 'iaido');
+  assert.equal(finisher.visual, 'iaidash');
+  assert.ok(finisher.dash && finisher.dash.dist > 200);
+  assert.ok(Math.abs(finisher.dash.offset) > 0.3); // 终结拔刀斜斩（随机左/右）
+  assert.ok(finisher.invuln > 0.1);
+
+  const opener = createWeaponAttack({
+    character: CHARS.blade,
+    stage: 0,
+    baseSlash: CHARS.blade.slash[0],
+    face: 0,
+    range: 118
+  });
+  assert.equal(opener.visual, 'iaido');           // 普通段为常规弧斩
+  assert.equal(opener.dash, undefined);
+  assert.equal(opener.hitArcs.length, 1);
 });
 
 test('ember attacks with twin blade arcs instead of one shared slash', () => {
