@@ -27,8 +27,8 @@
   .ult-wrap.ready .ult-track { border-color:#7ee0ff; box-shadow:0 0 16px rgba(126,224,255,.6); }
   .ult-wrap.ready .ult-label { opacity:1; color:#7ee0ff; animation:pulse .8s infinite; }
   @keyframes pulse { 50% { opacity:.4; } }
-  .perks { position:absolute; bottom:22px; left:22px; display:flex; gap:6px; flex-wrap:wrap; max-width:300px; }
-  .perk { font-size:16px; background:#16161e; border:1px solid #333; padding:4px 7px; border-radius:5px; }
+  .perks { position:absolute; bottom:22px; left:22px; display:flex; gap:6px; flex-wrap:nowrap; max-width:60vw; overflow:hidden; }
+  .perk { font-size:14px; background:#16161e; border:1px solid #333; padding:3px 6px; border-radius:5px; white-space:nowrap; }
   .perk.r1 { border-color:#5a8fd0; } .perk.r2 { border-color:#d0a23f; box-shadow:0 0 8px rgba(208,162,63,.4); }
   #toasts { position:absolute; top:110px; right:22px; display:flex; flex-direction:column; gap:8px; align-items:flex-end; max-width:340px; }
   .toast { background:#13131b; border:1px solid #ffd23f; color:#ffd23f; font-size:12px; letter-spacing:1px; padding:9px 16px; animation:toastIn 3.8s ease forwards; }
@@ -147,6 +147,7 @@
   #stickKnob { position:absolute; left:50%; top:50%; width:44px; height:44px; margin:-22px 0 0 -22px; background:rgba(126,224,255,.3); border:1px solid rgba(126,224,255,.7); border-radius:50%; }
   .tbtn { position:fixed; pointer-events:auto; touch-action:none; font-family:inherit; border-radius:50%; background:rgba(19,19,27,.55); color:#7ee0ff; border:2px solid rgba(126,224,255,.5); font-size:20px; letter-spacing:0; user-select:none; -webkit-user-select:none; }
   .tbtn:active { background:rgba(126,224,255,.25); }
+  .tbtn.ready { border-color:#7ee0ff; box-shadow:0 0 14px rgba(126,224,255,.5); }
   #tAtk { right:calc(24px + env(safe-area-inset-right, 0px)); bottom:calc(42px + env(safe-area-inset-bottom, 0px)); width:78px; height:78px; font-size:24px; }
   #tDash { right:calc(118px + env(safe-area-inset-right, 0px)); bottom:calc(26px + env(safe-area-inset-bottom, 0px)); width:60px; height:60px; }
   #tUlt { right:calc(34px + env(safe-area-inset-right, 0px)); bottom:calc(138px + env(safe-area-inset-bottom, 0px)); width:60px; height:60px; color:#ffd23f; border-color:rgba(255,210,63,.55); }

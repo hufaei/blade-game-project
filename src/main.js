@@ -496,9 +496,7 @@ function startGame(daily, raid = false){
   if (stats.meta.card){
     const p = PERKS[Math.floor(Math.random() * PERKS.length)];
     p.f(); owned.push(p.id);
-    const sp = document.createElement('span');
-    sp.className = 'perk r' + p.r; sp.textContent = p.ic; sp.title = p.nm;
-    $('perksEl').appendChild(sp);
+    renderOwnedPerks();
     toast('✧ 命运馈赠 · ' + p.nm);
   }
   gravesRun = [];
@@ -585,14 +583,40 @@ function showUpgrades(){
   });
   $('upgScr').classList.remove('hide');
 }
+// 已选天赋：去重堆叠（×N），最多一行，超出折叠
+function renderOwnedPerks(){
+  const counts = new Map();
+  for (const id of owned) counts.set(id, (counts.get(id) || 0) + 1);
+  const el = $('perksEl');
+  el.innerHTML = '';
+  let shown = 0;
+  const MAX_ICONS = 9;
+  for (const [id, n] of counts){
+    const p = PERKS.find(pp => pp.id === id);
+    if (!p) continue;
+    if (shown >= MAX_ICONS){
+      const more = document.createElement('span');
+      more.className = 'perk';
+      more.textContent = '+' + (counts.size - shown);
+      more.title = '更多天赋…';
+      el.appendChild(more);
+      break;
+    }
+    const sp = document.createElement('span');
+    sp.className = 'perk r' + p.r;
+    sp.textContent = p.ic + (n > 1 ? '×' + n : '');
+    sp.title = p.nm + (n > 1 ? ' ×' + n : '');
+    el.appendChild(sp);
+    shown++;
+  }
+}
+
 function pickCard(i){
   const p = curCards[i];
   p.f();
   owned.push(p.id);
   sfx('pick');
-  const sp = document.createElement('span');
-  sp.className = 'perk r' + p.r; sp.textContent = p.ic; sp.title = p.nm;
-  $('perksEl').appendChild(sp);
+  renderOwnedPerks();
   floats.push({ x:P.x, y:P.y - 40, txt:'◆ ' + p.nm, t:0, col:p.r === 2 ? '#ffd23f' : '#7ee0ff', big:true });
   $('upgScr').classList.add('hide');
   if (pendingLevels > 0) pendingLevels--;
@@ -740,6 +764,13 @@ function doAttack(){
   if (finalStage && wid === 'odachi'){
     icefields.push({ x:P.x, y:P.y, r:155, t:0, life:2.6 });
     rings.push({ x:P.x, y:P.y, r:30, max:155, a:0.9, col:'#b9a8ff' });
+  }
+  // 燹：X 斩交点的冲击波纹与火星
+  if (finalStage && wid === 'dual'){
+    const cxp = P.x + Math.cos(P.face) * range * 0.5;
+    const cyp = P.y + Math.sin(P.face) * range * 0.5;
+    rings.push({ x:cxp, y:cyp, r:8, max:72, a:1, col:PC.col });
+    burst(cxp, cyp, '#fff', 6, P.face);
   }
 
   let hitAny = false, killAny = false, critAny = false;
@@ -2050,6 +2081,18 @@ function update(dt){
   $('ultWrap').classList.toggle('ready', ult >= 100);
   $('xpFill').style.width = clamp(xp / xpNeed() * 100, 0, 100) + '%';
   $('lvlEl').textContent = 'LV ' + level;
+  if (IS_TOUCH){
+    // 闪避按钮的环形 CD 指示
+    const el = $('tDash');
+    const cd = clamp(P.dashCD / (1.55 * ST.dashCD), 0, 1);
+    if (cd > 0){
+      el.style.background = `conic-gradient(rgba(19,19,27,.85) ${cd * 360}deg, rgba(126,224,255,.22) 0deg)`;
+      el.classList.remove('ready');
+    } else {
+      el.style.background = '';
+      el.classList.add('ready');
+    }
+  }
 }
 
 // ---------- 绘制 ----------
@@ -2072,26 +2115,62 @@ function drawSlash(s){
   const pr = clamp(s.t / s.dur, 0, 1);
   const fade = 1 - pr * pr;
   if (s.weapon === 'dualx'){
-    // X 斩：两道交叉剑光在身前，第二道略迟
+    // X 斩：两道锥形刀刃交叉于身前，带超调入场、交点闪光与霓虹残影
     const cx = s.x + Math.cos(s.a) * s.range * 0.5;
     const cy = s.y + Math.sin(s.a) * s.range * 0.5;
-    const L = s.range * 0.75;
+    const L = s.range * 0.78;
     ctx.save();
     ctx.lineCap = 'round';
-    for (const [off, delay] of [[-0.55, 0], [0.55, 0.12]]){
-      const lp = clamp((pr - delay) / 0.42, 0, 1);   // 两道线都在动画前半段画完，X 成形后保持发光
+    for (const [off, delay] of [[-0.55, 0], [0.55, 0.1]]){
+      const lp = clamp((pr - delay) / 0.32, 0, 1);
       if (lp <= 0) continue;
       const a = s.a + off;
-      const x1 = cx - Math.cos(a) * L, y1 = cy - Math.sin(a) * L;
-      const x2 = x1 + Math.cos(a) * 2 * L * lp, y2 = y1 + Math.sin(a) * 2 * L * lp;
+      const len = L * lp * (1 + 0.1 * Math.sin(lp * Math.PI));   // 轻微超调再回弹
+      const x1 = cx - Math.cos(a) * len, y1 = cy - Math.sin(a) * len;
+      const x2 = cx + Math.cos(a) * len, y2 = cy + Math.sin(a) * len;
+      const pxv = Math.cos(a + Math.PI / 2), pyv = Math.sin(a + Math.PI / 2);
+      // 底层残光
+      ctx.globalAlpha = fade * 0.5;
+      ctx.strokeStyle = `rgba(${s.rgb},0.5)`;
+      ctx.lineWidth = 13 * (1 - pr * 0.6);
+      ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+      // 锥形白刃：两端尖、中间宽
+      const w = 4.5 * (1 - pr * 0.5);
       ctx.globalAlpha = fade;
-      ctx.strokeStyle = `rgba(${s.rgb},0.4)`;
-      ctx.lineWidth = 14 * (1 - pr);
-      ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
-      ctx.shadowColor = `rgb(${s.rgb})`; ctx.shadowBlur = 22;
-      ctx.strokeStyle = 'rgba(255,255,255,0.95)';
-      ctx.lineWidth = 5 * (1 - pr * 0.5);
-      ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+      ctx.shadowColor = `rgb(${s.rgb})`; ctx.shadowBlur = 26;
+      ctx.fillStyle = 'rgba(255,255,255,0.95)';
+      ctx.beginPath();
+      ctx.moveTo(x1, y1);
+      ctx.lineTo(cx + pxv * w, cy + pyv * w);
+      ctx.lineTo(x2, y2);
+      ctx.lineTo(cx - pxv * w, cy - pyv * w);
+      ctx.closePath(); ctx.fill();
+      ctx.shadowBlur = 0;
+      // 霓虹错位残影
+      if (pr > 0.45){
+        ctx.globalAlpha = fade * 0.55;
+        ctx.strokeStyle = `rgba(${s.rgb},0.85)`;
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(x1 + pxv * 3, y1 + pyv * 3);
+        ctx.lineTo(x2 + pxv * 3, y2 + pyv * 3);
+        ctx.stroke();
+      }
+    }
+    // 交点闪光：第二刀落下瞬间的旋转菱形光斑
+    const fp = clamp((pr - 0.1) / 0.3, 0, 1);
+    if (fp > 0 && fp < 1){
+      ctx.globalAlpha = (1 - fp) * 0.9;
+      ctx.fillStyle = '#fff';
+      ctx.shadowColor = `rgb(${s.rgb})`; ctx.shadowBlur = 30;
+      ctx.save();
+      ctx.translate(cx, cy);
+      ctx.rotate(s.a + fp * 1.2);
+      const fs = 6 + fp * 26;
+      ctx.beginPath();
+      ctx.moveTo(fs, 0); ctx.lineTo(0, fs * 0.35); ctx.lineTo(-fs, 0); ctx.lineTo(0, -fs * 0.35);
+      ctx.closePath(); ctx.fill();
+      ctx.restore();
       ctx.shadowBlur = 0;
     }
     ctx.restore();
@@ -2667,7 +2746,7 @@ function draw(){
 if (location.search.includes('debug=1')){
   window.__skipToWave = n => { wave = n - 1; enemies = []; spawnQ = []; eshots = []; impacts = []; firetrails = []; boss = null; waveDone = false; nextWave(); };
   window.__levelUp = () => { level++; pendingLevels++; };   // 波末结算
-  window.__pstate = () => ({ stage:P.atkStage, atkT:+P.atkT.toFixed(3), x:Math.round(P.x), y:Math.round(P.y), inv:+P.inv.toFixed(2), slashW: slashes.map(s2 => s2.weapon).join(',') });
+  window.__pstate = () => ({ st:state, stage:P.atkStage, atkT:+P.atkT.toFixed(3), buf:P.atkBuf, cool:+P.atkCool.toFixed(3), dst:+P.dashStrikeT.toFixed(2), sln:PC.slash.length, aspd:ST.aspd, x:Math.round(P.x), y:Math.round(P.y), inv:+P.inv.toFixed(2), slashW: slashes.map(s2 => s2.weapon).join(',') });
   window.__clearWave = () => {
     spawnQ = [];
     for (let i = enemies.length - 1; i >= 0; i--) killEnemy(i, 0);
