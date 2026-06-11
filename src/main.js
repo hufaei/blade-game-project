@@ -363,6 +363,66 @@ addEventListener('keydown', e => {
 });
 addEventListener('keyup', e => keys[e.key.toLowerCase()] = false);
 
+// ---------- 触控 ----------
+const IS_TOUCH = matchMedia('(pointer: coarse)').matches || 'ontouchstart' in window || location.search.includes('touch=1');
+let tvx = 0, tvy = 0, tAtkHeld = false;
+if (IS_TOUCH){
+  document.body.classList.add('touch');
+  const zone = $('stickZone'), stick = $('stick'), knob = $('stickKnob');
+  let stickId = null, sbx = 0, sby = 0;
+  const R = 52;
+
+  zone.addEventListener('touchstart', e => {
+    e.preventDefault();
+    if (stickId !== null) return;
+    const t = e.changedTouches[0];
+    stickId = t.identifier; sbx = t.clientX; sby = t.clientY;
+    stick.style.left = sbx + 'px'; stick.style.top = sby + 'px';
+    stick.classList.add('on');
+  }, { passive:false });
+
+  zone.addEventListener('touchmove', e => {
+    e.preventDefault();
+    for (const t of e.changedTouches){
+      if (t.identifier !== stickId) continue;
+      let dx = t.clientX - sbx, dy = t.clientY - sby;
+      const l = Math.hypot(dx, dy);
+      if (l > R){ dx = dx / l * R; dy = dy / l * R; }
+      knob.style.transform = `translate(${dx}px,${dy}px)`;
+      const dead = 10;
+      if (l < dead){ tvx = 0; tvy = 0; }
+      else { tvx = dx / R; tvy = dy / R; const n = Math.hypot(tvx, tvy); if (n > 1){ tvx /= n; tvy /= n; } }
+    }
+  }, { passive:false });
+
+  const stickEnd = e => {
+    for (const t of e.changedTouches){
+      if (t.identifier !== stickId) continue;
+      stickId = null; tvx = 0; tvy = 0;
+      knob.style.transform = '';
+      stick.classList.remove('on');
+    }
+  };
+  zone.addEventListener('touchend', stickEnd);
+  zone.addEventListener('touchcancel', stickEnd);
+
+  const bind = (id, down, up) => {
+    const el = $(id);
+    el.addEventListener('touchstart', e => { e.preventDefault(); down(); }, { passive:false });
+    if (up){
+      el.addEventListener('touchend', e => { e.preventDefault(); up(); }, { passive:false });
+      el.addEventListener('touchcancel', up);
+    }
+  };
+  bind('tAtk', () => { if (state === 'play'){ P.atkBuf = true; tAtkHeld = true; } }, () => tAtkHeld = false);
+  bind('tDash', () => { if (state === 'play') tryDash(); });
+  bind('tUlt', () => { if (state === 'play') tryUlt(); });
+  bind('tPause', () => {
+    if (state === 'play'){ state = 'pause'; banner('PAUSED'); }
+    else if (state === 'pause') state = 'play';
+  });
+}
+
 function toggleMute(){
   stats.muted = !stats.muted;
   setMuted(stats.muted);
@@ -839,6 +899,7 @@ function tryDash(){
   if ((P.dashCD > 0 && !MUT.nocd) || P.dashT > 0) return;
   let dx = (keys['d']||keys['arrowright']?1:0) - (keys['a']||keys['arrowleft']?1:0);
   let dy = (keys['s']||keys['arrowdown']?1:0) - (keys['w']||keys['arrowup']?1:0);
+  if (!dx && !dy && (tvx || tvy)){ dx = tvx; dy = tvy; }
   if (!dx && !dy){ dx = Math.cos(P.face); dy = Math.sin(P.face); }
   const l = Math.hypot(dx, dy);
   P.dvx = dx/l; P.dvy = dy/l;
@@ -1206,6 +1267,8 @@ function update(dt){
   let my = (keys['s']||keys['arrowdown']?1:0) - (keys['w']||keys['arrowup']?1:0);
   const ml = Math.hypot(mx, my) || 1;
   mx /= ml; my /= ml;
+  if (tvx || tvy){ mx = tvx; my = tvy; }
+  if (tAtkHeld) P.atkBuf = true;
   if (P.dashT > 0){
     P.dashT -= pd;
     P.x += P.dvx * 950 * pd; P.y += P.dvy * 950 * pd;

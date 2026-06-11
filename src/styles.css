@@ -135,6 +135,47 @@
   .banner { position:absolute; top:36%; width:100%; text-align:center; font-size:38px; letter-spacing:14px; font-weight:bold; opacity:0; text-shadow:0 0 24px rgba(126,224,255,.8); pointer-events:none; }
   .banner.show { animation:bannerAnim 1.6s ease forwards; }
   @keyframes bannerAnim { 0%{opacity:0;transform:scale(.8)} 15%{opacity:1;transform:scale(1.06)} 25%{transform:scale(1)} 75%{opacity:1} 100%{opacity:0;transform:scale(1.04)} }
+  /* ---------- 触控 UI ---------- */
+  #touchUI { display:none; }
+  body.touch #touchUI { display:block; }
+  #stickZone { position:fixed; left:0; top:0; width:58vw; height:100%; pointer-events:auto; touch-action:none; }
+  #stick { position:fixed; width:104px; height:104px; border:2px solid rgba(126,224,255,.35); border-radius:50%; pointer-events:none; opacity:0; transform:translate(-50%,-50%); }
+  #stick.on { opacity:1; }
+  #stickKnob { position:absolute; left:50%; top:50%; width:44px; height:44px; margin:-22px 0 0 -22px; background:rgba(126,224,255,.3); border:1px solid rgba(126,224,255,.7); border-radius:50%; }
+  .tbtn { position:fixed; pointer-events:auto; touch-action:none; font-family:inherit; border-radius:50%; background:rgba(19,19,27,.55); color:#7ee0ff; border:2px solid rgba(126,224,255,.5); font-size:20px; letter-spacing:0; user-select:none; -webkit-user-select:none; }
+  .tbtn:active { background:rgba(126,224,255,.25); }
+  #tAtk { right:24px; bottom:42px; width:78px; height:78px; font-size:24px; }
+  #tDash { right:118px; bottom:26px; width:60px; height:60px; }
+  #tUlt { right:34px; bottom:138px; width:60px; height:60px; color:#ffd23f; border-color:rgba(255,210,63,.55); }
+  #tPause { top:60px; right:22px; width:40px; height:40px; font-size:13px; color:#9aa3b8; border-color:#3a3a4e; border-radius:8px; }
+  body.touch .ult-wrap { bottom:215px; width:min(240px,46vw); }
+  body.touch .perks { bottom:14px; left:12px; max-width:42vw; }
+  body.touch .keys { display:none; }
+
+  /* ---------- 窄屏适配 ---------- */
+  @media (max-width:640px){
+    h1 { font-size:32px; letter-spacing:8px; }
+    .banner { font-size:24px; letter-spacing:8px; }
+    .score { font-size:20px; }
+    .combo-n { font-size:32px; }
+    .combo-box { top:78px; left:14px; }
+    .hud { top:12px; left:14px; }
+    .hp { top:12px; right:14px; max-width:170px; gap:4px; }
+    .heart { width:12px; height:12px; }
+    #toasts { top:104px; right:12px; max-width:72vw; }
+    .toast { font-size:11px; padding:7px 12px; }
+    .screen { padding:20px 0 30px; }
+    .chars { gap:10px; }
+    .char-card { width:44vw; max-width:158px; padding:12px 8px; }
+    .cards { gap:12px; flex-direction:column; align-items:center; }
+    .card { width:min(320px,86vw); padding:16px 14px; }
+    .upg-sub { margin-bottom:14px; }
+    .btn { font-size:14px; letter-spacing:3px; padding:10px 26px; }
+    .bossbar { top:52px; width:84vw; }
+    .boss-name { font-size:11px; letter-spacing:3px; }
+    .mission-box, .meta-box { padding:8px 10px; }
+  }
+
   .vignette { position:fixed; inset:0; pointer-events:none; box-shadow:inset 0 0 180px rgba(0,0,0,.75); }
   .hurt-flash { position:fixed; inset:0; pointer-events:none; background:radial-gradient(ellipse at center, transparent 40%, rgba(255,40,70,.45)); opacity:0; }
   .wt-tint { position:fixed; inset:0; pointer-events:none; background:radial-gradient(ellipse at center, rgba(126,224,255,.06), rgba(60,40,160,.14)); opacity:0; transition:opacity .2s; }
