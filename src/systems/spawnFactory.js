@@ -18,7 +18,9 @@ export function createEnemy({ type, x, y, wave, mutation, width, height, fastWar
   const sc = 1 + wave * 0.055;
   const canElite = wave >= 3 && type !== 'swarm' && type !== 'bomber' && x === undefined;
   const elite = canElite && Math.random() < Math.min((0.06 + wave * 0.018) * mutation.elite, 0.5);
-  const hpv = (t.hp + (type === 'tank' ? Math.floor(wave/3) : 0) + (type === 'chaser' && wave >= 6 ? 1 : 0)) * (elite ? 3 : 1);
+  // 血量随波次加厚，16 波封顶（之后靠数量压制）
+  const hpMul = 1 + Math.min(wave, 16) * 0.09;
+  const hpv = Math.max(1, Math.round(t.hp * hpMul)) * (elite ? 3 : 1);
 
   const enemy = {
     type,
@@ -70,7 +72,7 @@ export function markHunter(enemy) {
 export function createBoss({ wave, width, height }) {
   const { kind, def } = selectBoss(wave);
   const p = edgePos({ width, height });
-  const hpv = Math.floor(def.hp(wave));
+  const hpv = Math.floor(def.hp(Math.min(wave, 30)));   // Boss 血量 30 波封顶
 
   return {
     name: def.nm,

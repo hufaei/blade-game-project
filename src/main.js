@@ -594,11 +594,10 @@ function pickCard(i){
   $('perksEl').appendChild(sp);
   floats.push({ x:P.x, y:P.y - 40, txt:'◆ ' + p.nm, t:0, col:p.r === 2 ? '#ffd23f' : '#7ee0ff', big:true });
   $('upgScr').classList.add('hide');
-  if (pendingLevels > 0){
-    pendingLevels--;
-    if (pendingLevels > 0){ showUpgrades(); return; }
-  }
+  if (pendingLevels > 0) pendingLevels--;
+  if (pendingLevels > 0){ showUpgrades(); return; }   // 连升多级连续选卡
   state = 'play';
+  nextWave();
 }
 
 function banner(txt){
@@ -1365,10 +1364,10 @@ function update(dt){
         pendingLevels++;
         sfx('levelup');
         banner('LEVEL ' + level);
+        floats.push({ x:P.x, y:P.y - 60, txt:'+1 强化 · 波末结算', t:0, col:'#6ee07a' });
         flashA = Math.max(flashA, 0.2);
         rings.push({ x:P.x, y:P.y, r:P.r, max:150, a:1, col:'#ffd23f' });
       }
-      if (pendingLevels > 0 && state === 'play') showUpgrades();
     }
   }
   if (gems.length > 140){
@@ -1591,7 +1590,11 @@ function update(dt){
   }
   if (!spawnQ.length && !enemies.length && !boss && !waveDone && state === 'play'){
     waveDone = true; slowmo = 0.8;
-    setTimeout(() => { if (state === 'play') nextWave(); }, 1100);
+    setTimeout(() => {
+      if (state !== 'play') return;
+      if (pendingLevels > 0) showUpgrades();   // 波末结算攒下的升级
+      else nextWave();
+    }, 1100);
   }
 
   // 敌人 AI
@@ -2594,7 +2597,12 @@ function draw(){
 // 调试钩子：仅 ?debug=1 时暴露，便于跳波/升级测试
 if (location.search.includes('debug=1')){
   window.__skipToWave = n => { wave = n - 1; enemies = []; spawnQ = []; eshots = []; impacts = []; firetrails = []; boss = null; waveDone = false; nextWave(); };
-  window.__levelUp = () => { level++; pendingLevels++; showUpgrades(); };
+  window.__levelUp = () => { level++; pendingLevels++; };   // 波末结算
+  window.__clearWave = () => {
+    spawnQ = [];
+    for (let i = enemies.length - 1; i >= 0; i--) killEnemy(i, 0);
+    if (boss){ boss.hp = 0; killBoss(); }
+  };
   window.__grantXp = n => { gems.push({ x:P.x + 30, y:P.y, v:n, vx:0, vy:0, t:0 }); };
 }
 

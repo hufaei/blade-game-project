@@ -13,7 +13,8 @@ export function buildWavePlan({ wave, more }) {
     };
   }
 
-  let budget = (6 + wave * 3.0) * more;
+  // 基础预算约为原先两倍（拉长每波时长）；16 波血量封顶后数量激增
+  let budget = (10 + wave * 4.2 + Math.max(0, wave - 16) * 3.5) * more;
   let t = 0.6;
   const pool = [['chaser',2],['swarm',1]];
   if (wave >= 2) pool.push(['tank',4]);
