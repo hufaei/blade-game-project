@@ -760,17 +760,17 @@ function doAttack(){
     blades.push({ x:P.x + Math.cos(P.face) * 30, y:P.y + Math.sin(P.face) * 30, a:P.face, t:0, life:0.55, pierce:ST.wave, hitset:new Set() });
   }
 
-  // 霜：终结全周斩落下冰封领域
+  // 霜：终结全周斩落下冰封领域（全场仅存一个，新圈顶替旧圈）
   if (finalStage && wid === 'odachi'){
+    icefields.length = 0;
     icefields.push({ x:P.x, y:P.y, r:155, t:0, life:2.6 });
     rings.push({ x:P.x, y:P.y, r:30, max:155, a:0.9, col:'#b9a8ff' });
   }
-  // 燹：X 斩交点的冲击波纹与火星
+  // 燹：X 斩交点火星（不出波纹圈，保持收敛）
   if (finalStage && wid === 'dual'){
     const cxp = P.x + Math.cos(P.face) * range * 0.5;
     const cyp = P.y + Math.sin(P.face) * range * 0.5;
-    rings.push({ x:cxp, y:cyp, r:8, max:72, a:1, col:PC.col });
-    burst(cxp, cyp, '#fff', 6, P.face);
+    burst(cxp, cyp, '#fff', 5, P.face);
   }
 
   let hitAny = false, killAny = false, critAny = false;
@@ -2129,10 +2129,10 @@ function drawSlash(s){
       const x1 = cx - Math.cos(a) * len, y1 = cy - Math.sin(a) * len;
       const x2 = cx + Math.cos(a) * len, y2 = cy + Math.sin(a) * len;
       const pxv = Math.cos(a + Math.PI / 2), pyv = Math.sin(a + Math.PI / 2);
-      // 底层残光
-      ctx.globalAlpha = fade * 0.5;
-      ctx.strokeStyle = `rgba(${s.rgb},0.5)`;
-      ctx.lineWidth = 13 * (1 - pr * 0.6);
+      // 底层残光（收敛：窄而淡）
+      ctx.globalAlpha = fade * 0.3;
+      ctx.strokeStyle = `rgba(${s.rgb},0.4)`;
+      ctx.lineWidth = 8 * (1 - pr * 0.6);
       ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
       // 锥形白刃：两端尖、中间宽
       const w = 4.5 * (1 - pr * 0.5);

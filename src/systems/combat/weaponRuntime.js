@@ -41,7 +41,7 @@ export function createWeaponAttack({ character, stage, baseSlash, face, range })
       return {
         weaponId,
         visual: 'dualx',
-        movementBoost: -420,
+        movementBoost: -650,
         invuln: 0.18,
         hitArcs: [{ angle: face, half: 1.5, range: range * 1.15, damageMul: 1 }]
       };
