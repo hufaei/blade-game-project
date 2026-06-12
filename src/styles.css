@@ -157,6 +157,12 @@
   body.touch .ult-wrap { bottom:215px; width:min(240px,46vw); }
   body.touch .perks { bottom:14px; left:12px; max-width:42vw; }
   body.touch .keys { display:none; }
+  body.touch .hibar { display:none; }
+  body.touch .toast { font-size:10px; padding:5px 9px; max-width:56vw; letter-spacing:0; }
+  body.touch #toasts { top:94px; right:10px; gap:5px; }
+  body.touch #toasts .toast:nth-child(n+3) { display:none; }   /* 同屏最多 2 条提示 */
+  body.touch .lvl { font-size:11px; }
+  body.touch .mutbar { font-size:10px; max-width:50vw; }
 
   /* ---------- 手机横屏 ---------- */
   @media (orientation:landscape) and (max-height:500px){
@@ -178,8 +184,12 @@
     .char-card { width:152px; padding:10px 8px; }
     .mission-box, .meta-box { width:min(540px,92vw); margin-bottom:8px; }
     .btn { font-size:13px; padding:8px 22px; }
-    .cards { flex-direction:row; }
-    .card { width:min(200px,30vw); padding:14px 10px; }
+    .cards { flex-direction:row; gap:10px; }
+    .card { width:clamp(150px, 29vw, 210px); padding:12px 10px; }
+    .card .ic { font-size:24px; margin-bottom:5px; }
+    .card .nm { font-size:12px; margin-bottom:4px; }
+    .card .ds { font-size:10px; }
+    .card .num { display:none; }
   }
 
   /* ---------- 窄屏适配 ---------- */
@@ -197,9 +207,14 @@
     .screen { padding:20px 0 30px; }
     .chars { gap:10px; }
     .char-card { width:44vw; max-width:158px; padding:12px 8px; }
-    .cards { gap:12px; flex-direction:column; align-items:center; }
-    .card { width:min(320px,86vw); padding:16px 14px; }
-    .upg-sub { margin-bottom:14px; }
+    .cards { gap:10px; flex-direction:column; align-items:center; }
+    .card { width:min(300px,84vw); padding:12px 12px; }
+    .card .ic { font-size:26px; margin-bottom:6px; }
+    .card .nm { font-size:13px; margin-bottom:5px; }
+    .card .ds { font-size:10px; }
+    .card .num { display:none; }
+    .upg-title { font-size:20px; letter-spacing:6px; margin-bottom:4px; }
+    .upg-sub { font-size:10px; margin-bottom:10px; }
     .btn { font-size:14px; letter-spacing:3px; padding:10px 26px; }
     .bossbar { top:52px; width:84vw; }
     .boss-name { font-size:11px; letter-spacing:3px; }

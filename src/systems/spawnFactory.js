@@ -10,13 +10,13 @@ export function edgePos({ width, height, margin = 40 }) {
   return { x: -margin, y: rnd(0, height) };
 }
 
-export function createEnemy({ type, x, y, wave, mutation, width, height, fastWarm = false }) {
+export function createEnemy({ type, x, y, wave, mutation, width, height, fastWarm = false, fromEdge = false }) {
   const t = ETYPES[type];
   if (!t) throw new Error(`Unknown enemy type: ${type}`);
 
   const p = x !== undefined ? { x, y } : edgePos({ width, height });
   const sc = 1 + wave * 0.055;
-  const canElite = wave >= 3 && type !== 'swarm' && type !== 'bomber' && x === undefined;
+  const canElite = wave >= 3 && type !== 'swarm' && type !== 'bomber' && (x === undefined || fromEdge);
   const elite = canElite && Math.random() < Math.min((0.06 + wave * 0.018) * mutation.elite, 0.5);
   // 血量随波次加厚，16 波封顶（之后靠数量压制）
   const hpMul = 1 + Math.min(wave, 16) * 0.09;
@@ -69,9 +69,9 @@ export function markHunter(enemy) {
   return enemy;
 }
 
-export function createBoss({ wave, width, height }) {
+export function createBoss({ wave, width, height, x, y }) {
   const { kind, def } = selectBoss(wave);
-  const p = edgePos({ width, height });
+  const p = x !== undefined ? { x, y } : edgePos({ width, height });
   const hpv = Math.floor(def.hp(Math.min(wave, 30)));   // Boss 血量 30 波封顶
 
   return {

@@ -20,9 +20,20 @@ import { completeRevenge, selectNemesis } from './systems/progression/revengeSys
 const cv = document.getElementById('cv');
 const ctx = cv.getContext('2d');
 const storage = createStorageAdapter(window);
-let W = 0, H = 0;
-function resize(){ W = cv.width = innerWidth; H = cv.height = innerHeight; }
+let W = 0, H = 0, VIEW_Z = 1;
+function resize(){
+  cv.width = innerWidth; cv.height = innerHeight;
+  // 手机端略微广角；世界为视口的 1.9 倍，镜头跟随角色（角色始终居中）
+  VIEW_Z = (innerWidth < 700 || matchMedia('(pointer: coarse)').matches) ? 0.88 : 1;
+  W = Math.round(innerWidth / VIEW_Z * 1.9);
+  H = Math.round(innerHeight / VIEW_Z * 1.9);
+}
 addEventListener('resize', resize); resize();
+// 视口（世界单位）与镜头左上角
+function viewW(){ return cv.width / VIEW_Z; }
+function viewH(){ return cv.height / VIEW_Z; }
+function camX(){ return P.x - viewW() / 2; }
+function camY(){ return P.y - viewH() / 2; }
 
 let charId = 'blade';
 let PC = CHARS.blade;
@@ -644,7 +655,25 @@ function buildHearts(){
 }
 
 // ---------- 敌人 ----------
+// 在玩家视野边缘外一圈生成（镜头跟随后世界大于屏幕）
+function viewEdgePos(margin = 44){
+  const vw = viewW(), vh = viewH();
+  const left = P.x - vw / 2, top = P.y - vh / 2;
+  const s = Math.floor(Math.random() * 4);
+  let x, y;
+  if (s === 0){ x = rnd(left, left + vw); y = top - margin; }
+  else if (s === 1){ x = left + vw + margin; y = rnd(top, top + vh); }
+  else if (s === 2){ x = rnd(left, left + vw); y = top + vh + margin; }
+  else { x = left - margin; y = rnd(top, top + vh); }
+  return { x: clamp(x, -50, W + 50), y: clamp(y, -50, H + 50) };
+}
 function spawnEnemy(type, px, py, fastWarm){
+  let fromEdge = false;
+  if (px === undefined){
+    const p = viewEdgePos();
+    px = p.x; py = p.y;
+    fromEdge = true;
+  }
   const spawned = createEnemy({
     type,
     x:px,
@@ -653,7 +682,8 @@ function spawnEnemy(type, px, py, fastWarm){
     mutation: MUT,
     width: W,
     height: H,
-    fastWarm
+    fastWarm,
+    fromEdge
   });
   enemies.push(spawned.enemy);
   rings.push(spawned.spawnRing);
@@ -664,7 +694,8 @@ function spawnHunter(){
   markHunter(h);
 }
 function spawnBoss(){
-  const spawned = createBoss({ wave, width: W, height: H });
+  const bp = viewEdgePos(70);
+  const spawned = createBoss({ wave, width: W, height: H, x: bp.x, y: bp.y });
   boss = spawned.boss;
   lastBossKind = boss.kind;
   $('bossName').textContent = '◆ ' + spawned.name + ' ◆';
@@ -1824,8 +1855,10 @@ function update(dt){
     } else if (e.type === 'sniper'){
       e.lungeT -= d * slowM;
       if (e.lungeState === 0){
-        if (dist < 420){ e.x -= dx/dist * e.spd * slowM * d; e.y -= dy/dist * e.spd * slowM * d; }
-        else if (dist > 640){ e.x += dx/dist * e.spd * slowM * d; e.y += dy/dist * e.spd * slowM * d; }
+        // 保距按视野收缩，保证狙击手始终在可视范围边缘附近
+        const keep = Math.min(420, Math.min(viewW(), viewH()) * 0.38);
+        if (dist < keep){ e.x -= dx/dist * e.spd * slowM * d; e.y -= dy/dist * e.spd * slowM * d; }
+        else if (dist > keep + 200){ e.x += dx/dist * e.spd * slowM * d; e.y += dy/dist * e.spd * slowM * d; }
         if (e.lungeT <= 0 && dist < 720){ e.lungeState = 1; e.lungeT = 0.9; e.aimA = Math.atan2(dy, dx); }
       } else {
         if (e.lungeT > 0.22) e.aimA = Math.atan2(dy, dx);   // 最后 0.22 秒锁定，给闪避窗口
@@ -1863,7 +1896,9 @@ function update(dt){
     }
     e.x += e.vx * d; e.y += e.vy * d;
     e.vx *= Math.pow(0.001, d); e.vy *= Math.pow(0.001, d);
-    e.x = clamp(e.x, -60, W + 60); e.y = clamp(e.y, -60, H + 60);
+    // 出场后锁回屏幕内，杜绝远程怪蹲在视野外
+    if (e.warmup <= 0){ e.x = clamp(e.x, 14, W - 14); e.y = clamp(e.y, 14, H - 14); }
+    else { e.x = clamp(e.x, -60, W + 60); e.y = clamp(e.y, -60, H + 60); }
     if (!e.phased && e.type !== 'bomber' && Math.hypot(P.x - e.x, P.y - e.y) < P.r + e.r - 4 && P.inv <= 0)
       hurtPlayer(e.kb, Math.atan2(P.y - e.y, P.x - e.x), e.type);
   }
@@ -1922,9 +1957,9 @@ function update(dt){
         }
       } else if (boss.kind === 'prism'){
         boss.rot += d * 2.2;
-        if (boss.st === 'chase'){ // drift
-          const tx = W/2 + Math.cos(boss.rot * 0.3) * W * 0.22;
-          const ty = H/2 + Math.sin(boss.rot * 0.3) * H * 0.22;
+        if (boss.st === 'chase'){ // 绕玩家漂移（镜头跟随后世界变大，不再绕世界中心）
+          const tx = P.x + Math.cos(boss.rot * 0.3) * 320;
+          const ty = P.y + Math.sin(boss.rot * 0.3) * 260;
           boss.x += (tx - boss.x) * 0.4 * d; boss.y += (ty - boss.y) * 0.4 * d;
           if (boss.stT <= 0){
             if (Math.random() < 0.6){
@@ -2045,8 +2080,9 @@ function update(dt){
         }
       } else if (boss.kind === 'mortar'){
         boss.rot += d * 0.9;
-        if (dist < 430){ boss.x -= dx/dist * 70 * slowM * d; boss.y -= dy/dist * 70 * slowM * d; }
-        else if (dist > 660){ boss.x += dx/dist * 55 * slowM * d; boss.y += dy/dist * 55 * slowM * d; }
+        const keepM = Math.min(430, Math.min(viewW(), viewH()) * 0.4);
+        if (dist < keepM){ boss.x -= dx/dist * 70 * slowM * d; boss.y -= dy/dist * 70 * slowM * d; }
+        else if (dist > keepM + 220){ boss.x += dx/dist * 55 * slowM * d; boss.y += dy/dist * 55 * slowM * d; }
         if (boss.stT <= 0){
           boss.stT = enrage ? 2.3 : mid ? 2.8 : 3.4;
           const n = enrage ? 7 : mid ? 5 : 4;
@@ -2061,7 +2097,7 @@ function update(dt){
       }
       boss.x += boss.vx * d; boss.y += boss.vy * d;
       boss.vx *= Math.pow(0.001, d); boss.vy *= Math.pow(0.001, d);
-      boss.x = clamp(boss.x, -80, W + 80); boss.y = clamp(boss.y, -80, H + 80);
+      boss.x = clamp(boss.x, 30, W - 30); boss.y = clamp(boss.y, 30, H - 30);
       if (Math.hypot(P.x - boss.x, P.y - boss.y) < P.r + boss.r - 6 && P.inv <= 0)
         hurtPlayer(560, Math.atan2(P.y - boss.y, P.x - boss.x), 'boss');
     }
@@ -2374,17 +2410,28 @@ function drawPlayerAvatar(){
   ctx.shadowBlur = 0;
 }
 function draw(){
+  ctx.fillStyle = '#06060a';   // 世界边界之外的暗区
+  ctx.fillRect(0, 0, cv.width, cv.height);
+  ctx.save();
+  ctx.scale(VIEW_Z, VIEW_Z);
+  const cx0 = camX(), cy0 = camY();
+  ctx.translate(shakeX - cx0, shakeY - cy0);
+
+  // 世界底色与边界（界外更暗）
   ctx.fillStyle = wt > 0 ? '#0b0b16' : '#0a0a0f';
   ctx.fillRect(0, 0, W, H);
-  ctx.save();
-  ctx.translate(shakeX, shakeY);
+  ctx.strokeStyle = 'rgba(126,224,255,0.25)';
+  ctx.lineWidth = 2;
+  ctx.strokeRect(1, 1, W - 2, H - 2);
 
+  // 网格：只绘制视野与世界的交集
   ctx.strokeStyle = wt > 0 ? 'rgba(126,224,255,0.09)' : 'rgba(126,224,255,0.045)';
   ctx.lineWidth = 1;
   const g = 56;
+  const gx1 = Math.min(W, cx0 + viewW() + g), gy1 = Math.min(H, cy0 + viewH() + g);
   ctx.beginPath();
-  for (let x = (shakeX % g) - g; x < W + g; x += g){ ctx.moveTo(x, 0); ctx.lineTo(x, H); }
-  for (let y = (shakeY % g) - g; y < H + g; y += g){ ctx.moveTo(0, y); ctx.lineTo(W, y); }
+  for (let x = Math.max(0, Math.floor(cx0 / g) * g); x <= gx1; x += g){ ctx.moveTo(x, Math.max(0, cy0)); ctx.lineTo(x, gy1); }
+  for (let y = Math.max(0, Math.floor(cy0 / g) * g); y <= gy1; y += g){ ctx.moveTo(Math.max(0, cx0), y); ctx.lineTo(gx1, y); }
   ctx.stroke();
 
   if (state === 'play' || state === 'pause'){
@@ -2839,12 +2886,44 @@ function draw(){
   for (const f of floats){
     ctx.globalAlpha = 1 - f.t;
     ctx.fillStyle = f.col;
-    ctx.font = (f.big ? 'bold 26px' : f.dmg ? 'bold 12px' : 'bold 15px') + ' Courier New';
+    ctx.font = 'bold ' + Math.round((f.big ? 26 : f.dmg ? 12 : 15) / VIEW_Z) + 'px Courier New';
     ctx.textAlign = 'center';
     ctx.fillText(f.txt, f.x, f.y);
   }
   ctx.globalAlpha = 1;
   ctx.restore();
+
+  // 屏幕外敌人指示箭头（屏幕空间）
+  if (state === 'play' || state === 'pause'){
+    const vw = cv.width, vh = cv.height;
+    const cxs = vw / 2, cys = vh / 2;
+    let shown = 0;
+    const indicate = (wx, wy, col, size) => {
+      const sxp = (wx - camX()) * VIEW_Z, syp = (wy - camY()) * VIEW_Z;
+      if (sxp > -12 && sxp < vw + 12 && syp > -12 && syp < vh + 12) return;
+      const dx = sxp - cxs, dy = syp - cys;
+      const tx = dx !== 0 ? (dx > 0 ? (vw - 26 - cxs) / dx : (26 - cxs) / dx) : 1e9;
+      const ty = dy !== 0 ? (dy > 0 ? (vh - 26 - cys) / dy : (26 - cys) / dy) : 1e9;
+      const t = Math.min(tx, ty);
+      ctx.save();
+      ctx.translate(cxs + dx * t, cys + dy * t);
+      ctx.rotate(Math.atan2(dy, dx));
+      ctx.globalAlpha = 0.6;
+      ctx.fillStyle = col;
+      ctx.beginPath();
+      ctx.moveTo(size, 0); ctx.lineTo(-size * 0.6, -size * 0.6); ctx.lineTo(-size * 0.6, size * 0.6);
+      ctx.closePath(); ctx.fill();
+      ctx.restore();
+    };
+    for (const e of enemies){
+      if (e.warmup > 0) continue;
+      if (shown >= 14) break;
+      indicate(e.x, e.y, e.hunter ? '#ff3b5c' : e.col, e.elite ? 10 : 7);
+      shown++;
+    }
+    if (boss && boss.warmup <= 0) indicate(boss.x, boss.y, boss.col, 13);
+    ctx.globalAlpha = 1;
+  }
 
   if (flashA > 0){
     ctx.fillStyle = `rgba(255,255,255,${flashA})`;
