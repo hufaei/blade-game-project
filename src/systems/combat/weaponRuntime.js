@@ -123,6 +123,16 @@ export function createDashStrikeAttack(weaponId, face, range) {
       shockwave: { radius: 180, damage: 1, knockback: 540 }
     };
   }
+  if (weaponId === 'kunai') {
+    // 影 · 冲刺斩：扇形齐射一排苦无（远程突袭，不退回近战弧）
+    return {
+      weaponId,
+      visual: 'kunai',
+      movementBoost: 0,
+      projectiles: { count: 6, spread: 0.5, pierce: 2 },
+      hitArcs: []
+    };
+  }
   return {
     weaponId: 'iaido',
     visual: 'iaido',
