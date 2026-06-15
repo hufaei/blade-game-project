@@ -361,6 +361,10 @@ function aspdNow(){ return ST.aspd * (combo >= 20 ? 1.2 : combo >= 10 ? 1.1 : 1)
 const PERKS = createPerks({ ST, P, buildHearts });
 let enemies = [], particles = [], slashes = [], floats = [], spawnQ = [], rings = [], blades = [], eshots = [];
 let boss = null;
+// 同屏敌人硬上限：防 16 波后「数量激增」叠加 O(n²) 分离力把帧率拖垮（27 波卡顿主因）。设备感知，手机更保守。
+const ENEMY_CAP = (innerWidth < 700 || matchMedia('(pointer: coarse)').matches) ? 70 : 95;
+const DEBUG = location.search.includes('debug=1');   // ?debug=1 暴露跳波/压测钩子与性能 HUD
+let fpsMs = 16;                                       // 平滑帧时间（HUD 显示，性能验证用）
 let waveSpawnT = 0, waveDone = false;
 let curCards = [];
 // 经验等级制
@@ -583,6 +587,9 @@ function nextWave(){
   if (plan.bossWave){
     spawnBoss();
   }
+  // 跨波清理瞬态特效，杜绝跨波累积拖垮帧率（敌人/队列/宝石/经验不清）
+  particles = []; slashes = []; floats = []; rings = []; ultLines = []; blades = []; eshots = [];
+  cutmarks = []; darts = []; firetrails = []; impacts = []; pulses = []; healFx = []; icefields = [];
   waveSpawnT = 0;
 }
 
@@ -1015,7 +1022,7 @@ function killEnemy(i, ka){
   gainUlt(2);
   gems.push({ x:e.x + rnd(-8, 8), y:e.y + rnd(-8, 8), v:clamp(Math.round(e.score / 100), 1, 5), vx:rnd(-100, 100), vy:rnd(-100, 100), t:0 });
   if (e.type === 'splitter'){
-    for (let k = 0; k < 3; k++) spawnEnemy('swarm', e.x + rnd(-24, 24), e.y + rnd(-24, 24), true);
+    for (let k = 0; k < 3 && enemies.length < ENEMY_CAP + 12; k++) spawnEnemy('swarm', e.x + rnd(-24, 24), e.y + rnd(-24, 24), true);
   }
   if (ST.explode && Math.random() < 0.35) explosionsQ.push({ x:e.x, y:e.y });
   if (ST.lifesteal > 0){
@@ -1745,6 +1752,7 @@ function update(dt){
 
   waveSpawnT += d;
   for (let i = spawnQ.length - 1; i >= 0; i--){
+    if (enemies.length >= ENEMY_CAP) break;   // 到上限就把队列项留着，随击杀腾位再刷（波次结算不受影响）
     if (waveSpawnT >= spawnQ[i].t){ spawnEnemy(spawnQ[i].type); spawnQ.splice(i, 1); }
   }
   if (!spawnQ.length && (enemies.length || boss) && waveSpawnT > waveEndT + 9 && state === 'play'){
@@ -1755,7 +1763,7 @@ function update(dt){
       banner('⚠ 猎 杀 者 ⚠');
     }
     stallT -= d;
-    if (stallT <= 0){ stallT = 0.5; spawnHunter(); }   // 高频投放：要么速死要么速清，不拖泥带水
+    if (stallT <= 0){ stallT = 0.5; if (enemies.length < ENEMY_CAP) spawnHunter(); }   // 高频投放：要么速死要么速清，不拖泥带水
   }
   if (!spawnQ.length && !enemies.length && !boss && !waveDone && state === 'play'){
     waveDone = true; slowmo = 0.8;
@@ -1765,6 +1773,9 @@ function update(dt){
       else nextWave();
     }, 1100);
   }
+  // 瞬态特效硬上限：超量丢最旧，防高密度战斗下无界增长
+  if (particles.length > 260) particles.splice(0, particles.length - 260);
+  if (floats.length > 90) floats.splice(0, floats.length - 90);
 
   // 敌人 AI
   for (let ei = enemies.length - 1; ei >= 0; ei--){
@@ -1925,20 +1936,40 @@ function update(dt){
   }
 
   // 分离力：相互推开，避免叠成一团
+  // 空间哈希网格分离：只与同格+邻格的敌人推挤，O(n²)→~O(n)；推挤公式不变，行为等价
+  const SEP_CELL = 64;
+  const sepGrid = new Map();
   for (let i = 0; i < enemies.length; i++){
     const a = enemies[i];
     if (a.warmup > 0 || a.phased) continue;
-    for (let j = i + 1; j < enemies.length; j++){
-      const b = enemies[j];
-      if (b.warmup > 0 || b.phased) continue;
-      let sx = b.x - a.x, sy = b.y - a.y;
-      const sd = Math.hypot(sx, sy) || 0.01;
-      const min = a.r + b.r - 2;
-      if (sd < min){
-        const push = (min - sd) / sd * 0.5;
-        sx *= push; sy *= push;
-        a.x -= sx; a.y -= sy;
-        b.x += sx; b.y += sy;
+    const key = ((a.x / SEP_CELL) | 0) + ',' + ((a.y / SEP_CELL) | 0);
+    let cell = sepGrid.get(key);
+    if (!cell){ cell = []; sepGrid.set(key, cell); }
+    cell.push(i);
+  }
+  for (let i = 0; i < enemies.length; i++){
+    const a = enemies[i];
+    if (a.warmup > 0 || a.phased) continue;
+    const acx = (a.x / SEP_CELL) | 0, acy = (a.y / SEP_CELL) | 0;
+    for (let gx = acx - 1; gx <= acx + 1; gx++){
+      for (let gy = acy - 1; gy <= acy + 1; gy++){
+        const cell = sepGrid.get(gx + ',' + gy);
+        if (!cell) continue;
+        for (let c = 0; c < cell.length; c++){
+          const j = cell[c];
+          if (j <= i) continue;   // 每对只处理一次
+          const b = enemies[j];
+          if (b.warmup > 0 || b.phased) continue;
+          let sx = b.x - a.x, sy = b.y - a.y;
+          const sd = Math.hypot(sx, sy) || 0.01;
+          const min = a.r + b.r - 2;
+          if (sd < min){
+            const push = (min - sd) / sd * 0.5;
+            sx *= push; sy *= push;
+            a.x -= sx; a.y -= sy;
+            b.x += sx; b.y += sy;
+          }
+        }
       }
     }
   }
@@ -2437,6 +2468,12 @@ function draw(){
   ctx.scale(VIEW_Z, VIEW_Z);
   const cx0 = camX(), cy0 = camY();
   ctx.translate(shakeX - cx0, shakeY - cy0);
+  // 逐帧绘制热点预算：拥挤时降特效、now() 只算一次、伤害字 font 预算（避免循环内重复昂贵调用）
+  const nowMs = performance.now();
+  const crowded = enemies.length > 45;
+  const fontBig = 'bold ' + Math.round(26 / VIEW_Z) + 'px Courier New';
+  const fontDmg = 'bold ' + Math.round(12 / VIEW_Z) + 'px Courier New';
+  const fontNorm = 'bold ' + Math.round(15 / VIEW_Z) + 'px Courier New';
 
   // 世界底色与边界（界外更暗）
   ctx.fillStyle = wt > 0 ? '#0b0b16' : '#0a0a0f';
@@ -2505,8 +2542,8 @@ function draw(){
     const sz = 4 + g.v;
     ctx.save();
     ctx.translate(g.x, g.y);
-    ctx.rotate(performance.now() / 400 + g.x);
-    ctx.shadowColor = col; ctx.shadowBlur = 10;
+    ctx.rotate(nowMs / 400 + g.x);
+    ctx.shadowColor = col; ctx.shadowBlur = crowded ? 0 : 10;
     ctx.fillStyle = col;
     ctx.fillRect(-sz/2, -sz/2, sz, sz);
     ctx.restore();
@@ -2619,7 +2656,7 @@ function draw(){
     if (e.phased) ctx.globalAlpha = 0.25;
     const flash = e.flash > 0;
     ctx.fillStyle = flash ? '#ffffff' : e.col;
-    ctx.shadowColor = e.hunter ? '#ff3b5c' : e.col; ctx.shadowBlur = flash ? 24 : (e.elite || e.hunter ? 22 : 12);
+    ctx.shadowColor = e.hunter ? '#ff3b5c' : e.col; ctx.shadowBlur = flash ? 24 : (e.elite || e.hunter ? 22 : (crowded ? 0 : 12));
     let rot = e.rot;
     if (e.type === 'chaser') rot = Math.atan2(P.y - e.y, P.x - e.x);
     else if (e.type === 'tank') rot = e.rot * 0.4;
@@ -2907,7 +2944,7 @@ function draw(){
   for (const f of floats){
     ctx.globalAlpha = 1 - f.t;
     ctx.fillStyle = f.col;
-    ctx.font = 'bold ' + Math.round((f.big ? 26 : f.dmg ? 12 : 15) / VIEW_Z) + 'px Courier New';
+    ctx.font = f.big ? fontBig : f.dmg ? fontDmg : fontNorm;
     ctx.textAlign = 'center';
     ctx.fillText(f.txt, f.x, f.y);
   }
@@ -2958,11 +2995,28 @@ function draw(){
     ctx.textAlign = 'center';
     ctx.fillText('已 暂 停 · 按 P 继续', W/2, H/2);
   }
+  if (DEBUG){
+    ctx.save();
+    ctx.setTransform(1, 0, 0, 1, 0, 0);   // 屏幕空间，不受镜头变换影响
+    ctx.fillStyle = 'rgba(0,0,0,.55)';
+    ctx.fillRect(6, 6, 200, 104);
+    ctx.textAlign = 'left';
+    ctx.font = 'bold 13px Courier New';
+    ctx.fillStyle = fpsMs > 22 ? '#ff5e3a' : '#7ee0ff';
+    ctx.fillText('frame ' + fpsMs.toFixed(1) + 'ms  ' + Math.round(1000 / fpsMs) + 'fps', 14, 26);
+    ctx.fillStyle = '#cfd6e4';
+    ctx.fillText('enemies ' + enemies.length + ' / ' + ENEMY_CAP, 14, 44);
+    ctx.fillText('particles ' + particles.length + '  floats ' + floats.length, 14, 62);
+    ctx.fillText('gems ' + gems.length + '  rings ' + rings.length, 14, 80);
+    ctx.fillText('eshots ' + eshots.length + '  slashes ' + slashes.length, 14, 98);
+    ctx.restore();
+  }
 }
 
 // ---------- 主循环 ----------
 // 调试钩子：仅 ?debug=1 时暴露，便于跳波/升级测试
-if (location.search.includes('debug=1')){
+if (DEBUG){
+  window.__stress = n => { for (let i = 0; i < (n || 50); i++) spawnEnemy('chaser'); };   // 压测：瞬间投放 n 个敌人
   window.__skipToWave = n => { wave = n - 1; enemies = []; spawnQ = []; eshots = []; impacts = []; firetrails = []; boss = null; waveDone = false; nextWave(); };
   window.__levelUp = () => { level++; pendingLevels++; };   // 波末结算
   window.__pstate = () => ({ st:state, stage:P.atkStage, atkT:+P.atkT.toFixed(3), buf:P.atkBuf, cool:+P.atkCool.toFixed(3), dst:+P.dashStrikeT.toFixed(2), sln:PC.slash.length, aspd:ST.aspd, x:Math.round(P.x), y:Math.round(P.y), inv:+P.inv.toFixed(2), slashW: slashes.map(s2 => s2.weapon).join(',') });
@@ -2976,8 +3030,10 @@ if (location.search.includes('debug=1')){
 
 let last = performance.now();
 function loop(now){
-  const dt = Math.min(0.033, (now - last) / 1000);
+  const rawMs = now - last;
+  const dt = Math.min(0.033, rawMs / 1000);
   last = now;
+  if (DEBUG) fpsMs = fpsMs * 0.9 + rawMs * 0.1;
   try {
     if (state === 'play') update(dt);
     else if (state === 'over'){
