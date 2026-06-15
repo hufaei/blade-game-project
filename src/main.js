@@ -32,17 +32,19 @@ addEventListener('resize', resize); resize();
 // 视口（世界单位）与镜头左上角
 function viewW(){ return cv.width / VIEW_Z; }
 function viewH(){ return cv.height / VIEW_Z; }
-// 阻尼跟随镜头：角色先移动，镜头带滞后地回正 —— 位移感来自镜头落后，而非把角色钉死在中心
-const CAM_LAG = 0.00008;   // 滞后量（时间常数~0.1s，越小越紧跟）
-const CAM_MAX = 0.2;       // 角色离中心的最大偏移（占视野短边比例，瞬移再远也不会被甩出屏幕）
-let camCX = null, camCY = null;   // 平滑镜头中心（世界坐标，null=刚开局吸附到角色）
+// 死区跟随镜头：角色在中央死区框内自由移动、镜头完全不动（完整位移感，等同居中改动之前的静态镜头）；
+// 只有冲出死区时镜头才平滑追到框边缘，且停在边缘不回中 —— 既保住位移感又不会把角色跟丢出屏幕。
+const CAM_DEAD = 0.3;       // 死区半径（占视野短边比例）：框内镜头静止，越大越接近老的静态镜头手感
+const CAM_FOLLOW = 0.001;   // 出框后镜头追赶平滑度（越小追得越慢、瞬移甩得越远）
+let camCX = null, camCY = null;   // 镜头中心（世界坐标，null=刚开局吸附到角色）
 function updateCamera(dt){
   if (camCX === null){ camCX = P.x; camCY = P.y; return; }
-  const k = 1 - Math.pow(CAM_LAG, dt);
-  camCX += (P.x - camCX) * k; camCY += (P.y - camCY) * k;
-  const maxOff = Math.min(viewW(), viewH()) * CAM_MAX;
   const ox = P.x - camCX, oy = P.y - camCY, dd = Math.hypot(ox, oy);
-  if (dd > maxOff){ camCX = P.x - ox / dd * maxOff; camCY = P.y - oy / dd * maxOff; }
+  const dead = Math.min(viewW(), viewH()) * CAM_DEAD;
+  if (dd > dead){   // 仅当冲出死区，才把镜头朝角色追"超出的那部分"
+    const pull = (dd - dead) * (1 - Math.pow(CAM_FOLLOW, dt));
+    camCX += ox / dd * pull; camCY += oy / dd * pull;
+  }
 }
 function camX(){ return (camCX === null ? P.x : camCX) - viewW() / 2; }
 function camY(){ return (camCY === null ? P.y : camCY) - viewH() / 2; }
