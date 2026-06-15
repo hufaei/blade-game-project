@@ -783,8 +783,10 @@ function doAttack(){
   // 终结拔刀瞬移更远，索敌半径随之扩到瞬移距离，确保"有敌人就冲向它"而非冲进空地；
   // 范围内无敌人时保持原朝向（保留自由/随机手感）。其余角色索敌不变。
   const isIai = wid === 'iaido';
-  const seekR = (isIai && finalStage) ? range * 1.7 : range + 50;
-  const cone = isIai ? 2.0 : 1.5;
+  const isKunai = wid === 'kunai';
+  // 影远程：索敌半径拉到苦无射程、锥角放宽，确保飞掷可靠咬中目标（否则清不动 → 必触发猎杀者）
+  const seekR = (isIai && finalStage) ? range * 1.7 : (isKunai ? range * 3.6 : range + 50);
+  const cone = isIai ? 2.0 : (isKunai ? 1.7 : 1.5);
   let best = null, bd = 1e9;
   const all = boss ? enemies.concat([boss]) : enemies;
   for (const e of all){

@@ -81,7 +81,7 @@ export function createWeaponAttack({ character, stage, baseSlash, face, range })
       weaponId,
       visual: 'kunai',
       movementBoost: 0,
-      projectiles: finalK ? { count: 3, spread: 0.32, pierce: 2 } : { count: 1, spread: 0, pierce: 1 },
+      projectiles: finalK ? { count: 4, spread: 0.38, pierce: 3 } : { count: 2, spread: 0.16, pierce: 2 },
       hitArcs: []
     };
   }
