@@ -18,6 +18,10 @@ const BOSS_INFO = {
   mortar: {
     name: 'MORTAR',
     hint: '炮击落点提前一秒标记，持续移动别停脚。'
+  },
+  wraith: {
+    name: 'WRAITH',
+    hint: '影分身只是幻影，盯住带脉冲光环的真身；闪现后会放射影刃，别站在放射线上。'
   }
 };
 

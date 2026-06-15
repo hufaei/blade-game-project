@@ -371,9 +371,10 @@ let curCards = [];
 let level = 1, xp = 0, pendingLevels = 0, gems = [], gemStreak = 0, gemStreakT = 0;
 function xpNeed(){ return 10 + (level - 1) * 8; }
 // 自动武器 / Boss 危险区
-let orbitA = 0, seekT = 0, darts = [], firetrails = [], impacts = [];
+let orbitA = 0, seekT = 0, darts = [], firetrails = [], impacts = [], kunai = [];
 let icefields = [];   // 霜：冰封领域
 let cutmarks = [];    // 斩：拔刀斩痕（路径命中的斩杀特效）
+let shadeMark = null, shadeMarkT = 0;   // 影：瞬影斩标记落点（两段大招的第一段）
 
 // ---------- 输入 ----------
 addEventListener('keydown', e => {
@@ -499,7 +500,7 @@ function startGame(daily, raid = false){
   updateStreak();
   state = 'play';
   PC = CHARS[charId];
-  $('ultLabel').textContent = 'L · ' + (PC.weapon?.id === 'dual' ? '燎原乱舞' : PC.weapon?.id === 'odachi' ? '霜断领域' : '千刃一闪');
+  $('ultLabel').textContent = 'L · ' + (PC.weapon?.id === 'dual' ? '燎原乱舞' : PC.weapon?.id === 'odachi' ? '霜断领域' : PC.weapon?.id === 'kunai' ? '瞬影斩' : '千刃一闪');
   score = 0; wave = raidMode ? 4 : 0; kills = 0; combo = 0; maxCombo = 0; perfects = 0; ults = 0; bossKills = 0;
   ult = 0; ultFiring = 0; lifestealCnt = 0; lbSubmitted = false; pdCD = 0; shieldT = 0;
   resetST(); owned = [];
@@ -515,7 +516,7 @@ function startGame(daily, raid = false){
   enemies = []; particles = []; slashes = []; floats = []; spawnQ = []; rings = []; ultLines = []; ultEvents = []; blades = []; eshots = [];
   explosionsQ = []; pulses = []; healFx = [];
   level = 1; xp = 0; pendingLevels = 0; gems = []; gemStreak = 0; gemStreakT = 0;
-  orbitA = 0; seekT = 0; darts = []; firetrails = []; impacts = []; icefields = []; cutmarks = [];
+  orbitA = 0; seekT = 0; darts = []; firetrails = []; impacts = []; icefields = []; cutmarks = []; kunai = []; shadeMark = null;
   startMusic(); setMusicIntensity(0);
   boss = null;
   $('menuScr').classList.add('hide');
@@ -554,7 +555,7 @@ function returnToMenu(){
   runNemesis = null;
   enemies = []; particles = []; slashes = []; floats = []; spawnQ = []; rings = []; ultLines = []; ultEvents = []; blades = []; eshots = [];
   explosionsQ = []; pulses = []; healFx = [];
-  gems = []; darts = []; firetrails = []; impacts = []; icefields = []; cutmarks = [];
+  gems = []; darts = []; firetrails = []; impacts = []; icefields = []; cutmarks = []; kunai = []; shadeMark = null;
   combo = 0; comboT = 0; ultFiring = 0; hitstop = 0; slowmo = 0; wt = 0; shake = 0; flashA = 0;
   $('mutEl').textContent = '';
   $('hpEl').innerHTML = '';
@@ -589,7 +590,7 @@ function nextWave(){
   }
   // 跨波清理瞬态特效，杜绝跨波累积拖垮帧率（敌人/队列/宝石/经验不清）
   particles = []; slashes = []; floats = []; rings = []; ultLines = []; blades = []; eshots = [];
-  cutmarks = []; darts = []; firetrails = []; impacts = []; pulses = []; healFx = []; icefields = [];
+  cutmarks = []; darts = []; firetrails = []; impacts = []; pulses = []; healFx = []; icefields = []; kunai = []; shadeMark = null;
   waveSpawnT = 0;
 }
 
@@ -800,6 +801,19 @@ function doAttack(){
     ? createDashStrikeAttack(wid, P.face, range)
     : createWeaponAttack({ character: PC, stage: P.atkStage, baseSlash: st, face: P.face, range });
   sfx('swing');
+  if (attack.projectiles){
+    // 影 · 苦无：发射投射物，跳过近战判定（命中在 kunai 更新循环里结算）
+    const pj = attack.projectiles;
+    const kdmg = st.dmg + (dashStrikeActive ? ST.dashDmg : (finalStage ? ST.heavy : 0));
+    for (let n = 0; n < pj.count; n++){
+      const ka = P.face + (pj.count > 1 ? (n - (pj.count - 1) / 2) * pj.spread : 0);
+      kunai.push({ x:P.x + Math.cos(ka) * 18, y:P.y + Math.sin(ka) * 18, a:ka, t:0, life:0.62, spd:760, dmg:kdmg, pierce:pj.pierce, hitset:new Set(), returning:false });
+    }
+    burst(P.x + Math.cos(P.face) * 22, P.y + Math.sin(P.face) * 22, PC.col, 4, P.face);
+    if (dashStrikeActive){ floats.push({ x:P.x, y:P.y - 44, txt:st.nm + '!', t:0, col:PC.col, big:true }); flashA = Math.max(flashA, 0.14); }
+    shake = Math.max(shake, 4);
+    return;
+  }
   if (dashStrikeActive){
     floats.push({ x:P.x, y:P.y - 44, txt:st.nm + '!', t:0, col:PC.col, big:true });
     rings.push({ x:P.x, y:P.y, r:P.r, max:110, a:1, col:PC.col });
@@ -1024,6 +1038,11 @@ function killEnemy(i, ka){
   if (e.type === 'splitter'){
     for (let k = 0; k < 3 && enemies.length < ENEMY_CAP + 12; k++) spawnEnemy('swarm', e.x + rnd(-24, 24), e.y + rnd(-24, 24), true);
   }
+  if (e.type === 'tracer'){
+    // 死亡裂成 2 枚火星射向玩家，惩罚贴身击杀
+    const ba = Math.atan2(P.y - e.y, P.x - e.x);
+    for (let k = 0; k < 2; k++){ const a = ba + (k ? 0.4 : -0.4); eshots.push({ x:e.x, y:e.y, vx:Math.cos(a)*300, vy:Math.sin(a)*300, t:0, life:1.8, col:'#5df0c0' }); }
+  }
   if (ST.explode && Math.random() < 0.35) explosionsQ.push({ x:e.x, y:e.y });
   if (ST.lifesteal > 0){
     lifestealCnt++;
@@ -1151,10 +1170,12 @@ function strikeBossWithUlt(amount, ka, opts = {}){
 }
 
 function tryUlt(){
-  if (ult < 100 || ultFiring > 0) return;
   const wid = PC.weapon?.id || 'iaido';
+  // 影 · 两段大招：标记还在时，第二段瞬影斩免充能直接发动
+  if (wid === 'kunai' && shadeMark){ if (ultFiring <= 0) shadeBlinkCut(); return; }
+  if (ult < 100 || ultFiring > 0) return;
   ult = 0;
-  ultFiring = wid === 'odachi' ? 0.95 : wid === 'dual' ? 0.82 : 0.64;
+  ultFiring = wid === 'kunai' ? 0.22 : wid === 'odachi' ? 0.95 : wid === 'dual' ? 0.82 : 0.64;
   ults++;
   if (ults >= 3) achEarned('u3');
   hitstop = 0.12; flashA = wid === 'dual' ? 0.32 : 0.5; shake = wid === 'odachi' ? 34 : 30; slowmo = wid === 'dual' ? 0.65 : 0.9;
@@ -1247,6 +1268,22 @@ function tryUlt(){
     return;
   }
 
+  if (wid === 'kunai'){
+    // 第一段：甩出标记刃，钉在正前方锥内最近的敌人（没有则落在面前 380）
+    let mx = P.x + Math.cos(P.face) * 380, my = P.y + Math.sin(P.face) * 380, best = 1e9;
+    for (const e of enemies){
+      if (e.warmup > 0) continue;
+      const dd = Math.hypot(e.x - P.x, e.y - P.y);
+      if (dd < 520 && dd < best && Math.abs(angDiff(P.face, Math.atan2(e.y - P.y, e.x - P.x))) < 0.7){ best = dd; mx = e.x; my = e.y; }
+    }
+    shadeMark = { x: clamp(mx, 30, W - 30), y: clamp(my, 30, H - 30) };
+    shadeMarkT = 5;
+    banner('影 标 · 再按瞬影斩');
+    rings.push({ x:shadeMark.x, y:shadeMark.y, r:12, max:64, a:1, col:'#a45cff' });
+    for (let s = 0; s <= 5; s++) P.trail.push({ x:P.x + (shadeMark.x - P.x) * s / 5, y:P.y + (shadeMark.y - P.y) * s / 5, a:P.face, t:0.1 + s * 0.02 });
+    return;
+  }
+
   banner('千 刃 一 闪');
   rings.push({ x:P.x, y:P.y, r:18, max:180, a:0.9, col:'#7ee0ff' });
   for (let i = 0; i < 9; i++){
@@ -1283,6 +1320,34 @@ function tryUlt(){
     }
     shake = Math.max(shake, 20);
   } });
+}
+
+// 影 · 瞬影斩（两段大招第二段）：瞬移到标记 + 斩穿整条路径 + 残影
+function shadeBlinkCut(){
+  const sx = P.x, sy = P.y, ex = shadeMark.x, ey = shadeMark.y;
+  shadeMark = null; shadeMarkT = 0;
+  ultFiring = 0.4; ults++;
+  if (ults >= 3) achEarned('u3');
+  sfx('ult'); hitstop = 0.1; flashA = 0.42; shake = 28; slowmo = 0.7;
+  banner('瞬 影 斩');
+  const pa = Math.atan2(ey - sy, ex - sx);
+  P.x = ex; P.y = ey; P.vx = Math.cos(pa) * 160; P.vy = Math.sin(pa) * 160;
+  P.inv = Math.max(P.inv, 0.3);
+  for (let s = 0; s <= 6; s++) P.trail.push({ x:sx + (ex - sx) * s / 6, y:sy + (ey - sy) * s / 6, a:pa, t:0.16 + s * 0.03 });
+  const dxs = ex - sx, dys = ey - sy, len2 = dxs * dxs + dys * dys || 1;
+  const onPath = (tx, ty, tr) => { const tt = clamp(((tx - sx) * dxs + (ty - sy) * dys) / len2, 0, 1); return Math.hypot(tx - (sx + dxs * tt), ty - (sy + dys * tt)) < tr + 34; };
+  for (let i = enemies.length - 1; i >= 0; i--){
+    const e = enemies[i];
+    if (e.warmup > 0 || e.phased) continue;
+    if (!onPath(e.x, e.y, e.r)) continue;
+    cutmarks.push({ x:e.x, y:e.y, a:pa, len:e.r * 2 + 30, t:0 });
+    strikeEnemyWithUlt(i, 10, pa, { knock:420, col:'#a45cff', particles:14, deathBurst:true });
+  }
+  if (boss && boss.warmup <= 0 && onPath(boss.x, boss.y, boss.r))
+    strikeBossWithUlt(14, pa, { col:'#a45cff', particles:30, knock:120 });
+  rings.push({ x:ex, y:ey, r:20, max:150, a:1, col:'#a45cff' });
+  ultLines.push({ x1:sx, y1:sy, x2:ex, y2:ey, t:0, col:'#c89bff', glow:'#a45cff', w:5, grow:6 });
+  shake = Math.max(shake, 24);
 }
 
 // ---------- 粒子 ----------
@@ -1609,6 +1674,31 @@ function update(dt){
     }
     if (hitDone) darts.splice(i, 1);
   }
+  // 苦无投射物（影）：直线飞行 + 穿透；回刃天赋过半程反向飞回二次命中
+  for (let i = kunai.length - 1; i >= 0; i--){
+    const k = kunai[i];
+    k.t += d;
+    if (k.t >= k.life){ kunai.splice(i, 1); continue; }
+    if (ST.recoil && !k.returning && k.t > k.life * 0.42){ k.returning = true; k.a += Math.PI; k.hitset.clear(); }
+    k.x += Math.cos(k.a) * k.spd * d; k.y += Math.sin(k.a) * k.spd * d;
+    let gone = false;
+    for (let j = enemies.length - 1; j >= 0; j--){
+      const e = enemies[j];
+      if (e.warmup > 0 || e.phased || k.hitset.has(e)) continue;
+      if (Math.hypot(e.x - k.x, e.y - k.y) < e.r + 9){
+        k.hitset.add(e);
+        burst(k.x, k.y, '#c89bff', 5, k.a);
+        gainUlt(2);
+        hitEnemy(j, k.dmg, k.a, 200, false);
+        if (--k.pierce <= 0){ kunai.splice(i, 1); gone = true; break; }
+      }
+    }
+    if (!gone && boss && boss.warmup <= 0 && !k.hitset.has(boss) && Math.hypot(boss.x - k.x, boss.y - k.y) < boss.r + 9){
+      k.hitset.add(boss); burst(k.x, k.y, '#c89bff', 6, k.a); gainUlt(2); dmgBoss(k.dmg, k.a, 40);
+      if (--k.pierce <= 0) kunai.splice(i, 1);
+    }
+  }
+  if (shadeMark){ shadeMarkT -= dt; if (shadeMarkT <= 0) shadeMark = null; }
 
   // 冰封领域：范围内敌人持续减速
   for (let i = icefields.length - 1; i >= 0; i--){
@@ -1920,6 +2010,14 @@ function update(dt){
         const pull = 760 * (1 - dist / pr);
         P.vx -= dx/dist * pull * d; P.vy -= dy/dist * pull * d;
       }
+    } else if (e.type === 'tracer'){
+      // 曳光虫：正弦蛇形逼近（轨迹飘忽，远程难瞄）
+      if (e.weaveT === undefined) e.weaveT = rnd(0, TAU);
+      e.weaveT += d * 7;
+      const perp = Math.atan2(dy, dx) + Math.PI / 2;
+      const weave = Math.sin(e.weaveT) * e.spd * 0.95;
+      e.x += (dx / dist * e.spd + Math.cos(perp) * weave) * slowM * d;
+      e.y += (dy / dist * e.spd + Math.sin(perp) * weave) * slowM * d;
     } else {
       const fl = (e.flank || 0) * clamp((dist - 110) / 420, 0, 1);
       const ca = Math.cos(fl), sa = Math.sin(fl);
@@ -2145,6 +2243,30 @@ function update(dt){
           }
           sfx('warn');
           rings.push({ x:boss.x, y:boss.y, r:boss.r, max:boss.r + 40, a:1, col:boss.col });
+        }
+      } else if (boss.kind === 'wraith'){
+        boss.rot += d * 1.6;
+        if (!boss.decoys) boss.decoys = [];
+        if (boss.stT <= 0){
+          // 闪现重布：真身+3分身换位，放射影刃横扫，偶尔召唤曳光虫（主题闭环）
+          burst(boss.x, boss.y, '#a45cff', 14, 0, true);
+          const slots = [];
+          for (let i = 0; i < 4; i++){ const a = rnd(0, TAU), rr = rnd(190, 330); slots.push({ x: clamp(P.x + Math.cos(a) * rr, 60, W - 60), y: clamp(P.y + Math.sin(a) * rr, 60, H - 60) }); }
+          const realIdx = Math.floor(Math.random() * 4);
+          boss.x = slots[realIdx].x; boss.y = slots[realIdx].y;
+          boss.decoys = slots.filter((_, idx) => idx !== realIdx);
+          burst(boss.x, boss.y, '#a45cff', 18, 0, true);
+          sfx('dash');
+          const n = enrage ? 10 : 7;
+          for (let i = 0; i < n; i++){
+            const a = i / n * TAU + boss.rot;
+            ultLines.push({ x1:boss.x, y1:boss.y, x2:boss.x + Math.cos(a) * 900, y2:boss.y + Math.sin(a) * 900, t:0, col:'#c89bff', glow:'#a45cff', w:3, grow:3 });
+            const sp2 = 240 + wave * 5;
+            eshots.push({ x:boss.x, y:boss.y, vx:Math.cos(a) * sp2, vy:Math.sin(a) * sp2, t:0, life:3, col:'#c89bff' });
+          }
+          if ((mid || enrage) && enemies.length < ENEMY_CAP - 4){ for (let k = 0; k < 2; k++) spawnEnemy('tracer', boss.x + rnd(-30, 30), boss.y + rnd(-30, 30), true); }
+          rings.push({ x:boss.x, y:boss.y, r:boss.r, max:boss.r + 60, a:1, col:'#a45cff' });
+          boss.stT = enrage ? rnd(1.4, 2.0) : rnd(2.2, 3.0);
         }
       }
       boss.x += boss.vx * d; boss.y += boss.vy * d;
@@ -2549,6 +2671,26 @@ function draw(){
     ctx.restore();
   }
   ctx.shadowBlur = 0;
+  // 苦无投射物 + 瞬影标记（影）
+  for (const k of kunai){
+    ctx.save();
+    ctx.translate(k.x, k.y);
+    ctx.rotate(k.a + nowMs / 50);
+    ctx.shadowColor = '#a45cff'; ctx.shadowBlur = crowded ? 0 : 8;
+    ctx.fillStyle = '#c89bff';
+    poly(0, 0, 7, 4, 0);
+    ctx.fill();
+    ctx.restore();
+  }
+  ctx.shadowBlur = 0;
+  if (shadeMark){
+    ctx.strokeStyle = '#a45cff'; ctx.lineWidth = 2;
+    ctx.globalAlpha = 0.5 + Math.sin(nowMs / 90) * 0.35;
+    ctx.beginPath(); ctx.arc(shadeMark.x, shadeMark.y, 16 + Math.sin(nowMs / 120) * 3, 0, TAU); ctx.stroke();
+    ctx.globalAlpha = 0.9;
+    poly(shadeMark.x, shadeMark.y, 9, 4, nowMs / 200); ctx.stroke();
+    ctx.globalAlpha = 1;
+  }
 
   // 收割者焰痕
   for (const ft of firetrails){
@@ -2793,6 +2935,16 @@ function draw(){
         ctx.lineTo(boss.x + boss.cx * 800, boss.y + boss.cy * 800);
         ctx.stroke();
         ctx.setLineDash([]);
+        ctx.globalAlpha = 1;
+      }
+      if (boss.kind === 'wraith'){
+        // 影分身假目标：半透明幻影；真身（boss.x/y）带脉冲光环便于辨认
+        ctx.strokeStyle = '#a45cff'; ctx.lineWidth = 2;
+        ctx.globalAlpha = 0.32 + Math.sin(performance.now()/140) * 0.1;
+        for (const dc of (boss.decoys || [])){ poly(dc.x, dc.y, boss.r, 6, boss.rot); ctx.stroke(); }
+        ctx.strokeStyle = '#c89bff'; ctx.lineWidth = 2.5;
+        ctx.globalAlpha = 0.5 + Math.sin(performance.now()/90) * 0.4;
+        ctx.beginPath(); ctx.arc(boss.x, boss.y, boss.r + 12 + Math.sin(performance.now()/110) * 4, 0, TAU); ctx.stroke();
         ctx.globalAlpha = 1;
       }
       if (boss.kind === 'reaper' && boss.st === 'btele'){

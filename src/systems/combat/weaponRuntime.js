@@ -3,7 +3,8 @@ import { angDiff } from '../../core/math.js';
 const WEAPON_BY_CHARACTER = {
   '斩 · BLADE': 'iaido',
   '燹 · EMBER': 'dual',
-  '霜 · FROST': 'odachi'
+  '霜 · FROST': 'odachi',
+  '影 · SHADE': 'kunai'
 };
 
 function weaponIdFor(character) {
@@ -73,6 +74,18 @@ export function createWeaponAttack({ character, stage, baseSlash, face, range })
     return attack;
   }
 
+  if (weaponId === 'kunai') {
+    // 苦无：远程飞掷投射物（直线穿透）；终结段三连扇形齐射
+    const finalK = stage === ((character.slash ? character.slash.length : 4) - 1);
+    return {
+      weaponId,
+      visual: 'kunai',
+      movementBoost: 0,
+      projectiles: finalK ? { count: 3, spread: 0.32, pierce: 2 } : { count: 1, spread: 0, pierce: 1 },
+      hitArcs: []
+    };
+  }
+
   return {
     weaponId,
     visual: 'base',
@@ -85,7 +98,8 @@ export function createWeaponAttack({ character, stage, baseSlash, face, range })
 export const DASH_STRIKES = {
   iaido:  { dur:.22, range:175, half:.5,      dmg:3, kb:620, hs:.08, nm:'瞬步斩' },
   dual:   { dur:.2,  range:125, half:Math.PI, dmg:2, kb:520, hs:.06, nm:'焰轮回旋' },
-  odachi: { dur:.3,  range:150, half:Math.PI, dmg:2, kb:780, hs:.1,  nm:'碎地重斩' }
+  odachi: { dur:.3,  range:150, half:Math.PI, dmg:2, kb:780, hs:.1,  nm:'碎地重斩' },
+  kunai:  { dur:.2,  range:160, half:.4,      dmg:2, kb:300, hs:.05, nm:'影刃乱舞' }
 };
 
 export function createDashStrikeAttack(weaponId, face, range) {

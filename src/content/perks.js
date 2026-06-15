@@ -28,7 +28,8 @@ export function createDefaultSkillState() {
     orbit:0,
     seeker:0,
     magnet:1,
-    parry:false
+    parry:false,
+    recoil:false
   };
 }
 
@@ -62,5 +63,6 @@ export function createPerks({ ST, P, buildHearts }) {
     { id:'zanshin', r:2, ic:'✥', nm:'残心', ds:'完美闪避后\n下一击必定暴击', f:()=>ST.pdCrit=true, once:true, chars:['blade'] },
     { id:'spread', r:2, ic:'♆', nm:'燎原', ds:'灼烧中的敌人死亡时\n火焰传染给附近敌人', f:()=>ST.burnSpread=true, once:true, chars:['ember'] },
     { id:'shatter', r:2, ic:'❄', nm:'冰碎', ds:'对减速中的敌人\n伤害 +1', f:()=>ST.shatter=true, once:true, chars:['frost'] },
+    { id:'recoil', r:2, ic:'⟳', nm:'回刃', ds:'苦无飞回程\n二次命中', f:()=>ST.recoil=true, once:true, chars:['shade'] },
   ];
 }

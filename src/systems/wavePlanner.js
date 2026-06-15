@@ -29,6 +29,7 @@ export function buildWavePlan({ wave, more }) {
   if (wave >= 12) pool.push(['sniper',5]);
   if (wave >= 13) pool.push(['brood',6]);
   if (wave >= 14) pool.push(['vortex',6]);
+  if (wave >= 15) pool.push(['tracer',4]);
 
   const spawnQueue = [];
   while (budget > 0) {

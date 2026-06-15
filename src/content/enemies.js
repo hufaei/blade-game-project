@@ -13,6 +13,7 @@ export const KNAMES = {
   sniper:'棱光狙击',
   brood:'增殖育母',
   vortex:'引力井',
+  tracer:'曳光虫',
   boss:'巨型核心'
 };
 
@@ -30,5 +31,6 @@ export const ETYPES = {
   charger: { hp:3, r:18, spd:70,  col:'#e0b06e', score:320, kb:90,  sides:3 },
   sniper:  { hp:2, r:14, spd:75,  col:'#ff8cf0', score:340, kb:300, sides:6 },
   brood:   { hp:5, r:24, spd:48,  col:'#a4e07a', score:380, kb:160, sides:7 },
-  vortex:  { hp:3, r:20, spd:40,  col:'#7a9cff', score:360, kb:100, sides:9 }
+  vortex:  { hp:3, r:20, spd:40,  col:'#7a9cff', score:360, kb:100, sides:9 },
+  tracer:  { hp:3, r:12, spd:140, col:'#5df0c0', score:240, kb:280, sides:3 }
 };
