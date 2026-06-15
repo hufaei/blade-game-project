@@ -2727,7 +2727,11 @@ function draw(){
       ctx.restore();
       ctx.strokeStyle = '#a45cff'; ctx.lineWidth = 1.5;
       ctx.globalAlpha = rp * 0.6;
-      ctx.beginPath(); ctx.arc(rk.x, rk.y, 46, 0, TAU); ctx.stroke();
+      ctx.beginPath(); ctx.arc(rk.x, rk.y, 46, 0, TAU); ctx.stroke();   // 苦无持续伤害半径
+      ctx.globalAlpha = rp * 0.3;
+      ctx.setLineDash([6, 9]);
+      ctx.beginPath(); ctx.arc(rk.x, rk.y, 110, 0, TAU); ctx.stroke();   // 引爆范围半径
+      ctx.setLineDash([]);
       ctx.globalAlpha = 1;
     }
     ctx.shadowBlur = 0;
