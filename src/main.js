@@ -374,7 +374,8 @@ function xpNeed(){ return 10 + (level - 1) * 8; }
 let orbitA = 0, seekT = 0, darts = [], firetrails = [], impacts = [], kunai = [];
 let icefields = [];   // 霜：冰封领域
 let cutmarks = [];    // 斩：拔刀斩痕（路径命中的斩杀特效）
-let shadeMark = null, shadeMarkT = 0;   // 影：瞬影斩标记落点（两段大招的第一段）
+let shadeRing = [], shadeRingT = 0, shadeTickT = 0;   // 影：刃环领域（大招第一段）+ 引爆窗口
+const SHADE_RING_WINDOW = 5;
 
 // ---------- 输入 ----------
 addEventListener('keydown', e => {
@@ -516,7 +517,7 @@ function startGame(daily, raid = false){
   enemies = []; particles = []; slashes = []; floats = []; spawnQ = []; rings = []; ultLines = []; ultEvents = []; blades = []; eshots = [];
   explosionsQ = []; pulses = []; healFx = [];
   level = 1; xp = 0; pendingLevels = 0; gems = []; gemStreak = 0; gemStreakT = 0;
-  orbitA = 0; seekT = 0; darts = []; firetrails = []; impacts = []; icefields = []; cutmarks = []; kunai = []; shadeMark = null;
+  orbitA = 0; seekT = 0; darts = []; firetrails = []; impacts = []; icefields = []; cutmarks = []; kunai = []; shadeRing = []; shadeRingT = 0;
   startMusic(); setMusicIntensity(0);
   boss = null;
   $('menuScr').classList.add('hide');
@@ -555,7 +556,7 @@ function returnToMenu(){
   runNemesis = null;
   enemies = []; particles = []; slashes = []; floats = []; spawnQ = []; rings = []; ultLines = []; ultEvents = []; blades = []; eshots = [];
   explosionsQ = []; pulses = []; healFx = [];
-  gems = []; darts = []; firetrails = []; impacts = []; icefields = []; cutmarks = []; kunai = []; shadeMark = null;
+  gems = []; darts = []; firetrails = []; impacts = []; icefields = []; cutmarks = []; kunai = []; shadeRing = []; shadeRingT = 0;
   combo = 0; comboT = 0; ultFiring = 0; hitstop = 0; slowmo = 0; wt = 0; shake = 0; flashA = 0;
   $('mutEl').textContent = '';
   $('hpEl').innerHTML = '';
@@ -590,7 +591,7 @@ function nextWave(){
   }
   // 跨波清理瞬态特效，杜绝跨波累积拖垮帧率（敌人/队列/宝石/经验不清）
   particles = []; slashes = []; floats = []; rings = []; ultLines = []; blades = []; eshots = [];
-  cutmarks = []; darts = []; firetrails = []; impacts = []; pulses = []; healFx = []; icefields = []; kunai = []; shadeMark = null;
+  cutmarks = []; darts = []; firetrails = []; impacts = []; pulses = []; healFx = []; icefields = []; kunai = []; shadeRing = []; shadeRingT = 0;
   waveSpawnT = 0;
 }
 
@@ -1174,7 +1175,7 @@ function strikeBossWithUlt(amount, ka, opts = {}){
 function tryUlt(){
   const wid = PC.weapon?.id || 'iaido';
   // 影 · 两段大招：标记还在时，第二段瞬影斩免充能直接发动
-  if (wid === 'kunai' && shadeMark){ if (ultFiring <= 0) shadeBlinkCut(); return; }
+  if (wid === 'kunai' && shadeRing.length){ if (ultFiring <= 0) shadeDetonate(); return; }
   if (ult < 100 || ultFiring > 0) return;
   ult = 0;
   ultFiring = wid === 'kunai' ? 0.22 : wid === 'odachi' ? 0.95 : wid === 'dual' ? 0.82 : 0.64;
@@ -1271,18 +1272,18 @@ function tryUlt(){
   }
 
   if (wid === 'kunai'){
-    // 第一段：甩出标记刃，钉在正前方锥内最近的敌人（没有则落在面前 380）
-    let mx = P.x + Math.cos(P.face) * 380, my = P.y + Math.sin(P.face) * 380, best = 1e9;
-    for (const e of enemies){
-      if (e.warmup > 0) continue;
-      const dd = Math.hypot(e.x - P.x, e.y - P.y);
-      if (dd < 520 && dd < best && Math.abs(angDiff(P.face, Math.atan2(e.y - P.y, e.x - P.x))) < 0.7){ best = dd; mx = e.x; my = e.y; }
+    // 第一段：以自身为心，环形撒出 7 枚大苦无，钉在四周持续 AoE；窗口内可再按引爆
+    shadeRing = [];
+    const N = 7, R = 165;
+    for (let i = 0; i < N; i++){
+      const ra = i / N * TAU + P.face;
+      const rx = clamp(P.x + Math.cos(ra) * R, 30, W - 30), ry = clamp(P.y + Math.sin(ra) * R, 30, H - 30);
+      shadeRing.push({ x:rx, y:ry, a:ra });
+      rings.push({ x:rx, y:ry, r:8, max:48, a:0.9, col:'#a45cff' });
+      for (let s = 0; s <= 4; s++) P.trail.push({ x:P.x + (rx - P.x) * s / 4, y:P.y + (ry - P.y) * s / 4, a:ra, t:0.08 + s * 0.02 });
     }
-    shadeMark = { x: clamp(mx, 30, W - 30), y: clamp(my, 30, H - 30) };
-    shadeMarkT = 5;
-    banner('影 标 · 再按瞬影斩');
-    rings.push({ x:shadeMark.x, y:shadeMark.y, r:12, max:64, a:1, col:'#a45cff' });
-    for (let s = 0; s <= 5; s++) P.trail.push({ x:P.x + (shadeMark.x - P.x) * s / 5, y:P.y + (shadeMark.y - P.y) * s / 5, a:P.face, t:0.1 + s * 0.02 });
+    shadeRingT = SHADE_RING_WINDOW; shadeTickT = 0;
+    banner('刃 环 · 窗口内可瞬影引爆');
     return;
   }
 
@@ -1325,31 +1326,31 @@ function tryUlt(){
 }
 
 // 影 · 瞬影斩（两段大招第二段）：瞬移到标记 + 斩穿整条路径 + 残影
-function shadeBlinkCut(){
-  const sx = P.x, sy = P.y, ex = shadeMark.x, ey = shadeMark.y;
-  shadeMark = null; shadeMarkT = 0;
+// 影 · 刃环引爆（大招第二段）：瞬移到随机一枚大苦无 + 引爆整圈 → 大范围 AoE
+function shadeDetonate(){
+  if (!shadeRing.length) return;
+  const sx = P.x, sy = P.y;
+  const tgt = shadeRing[Math.floor(Math.random() * shadeRing.length)];
   ultFiring = 0.4; ults++;
   if (ults >= 3) achEarned('u3');
-  sfx('ult'); hitstop = 0.1; flashA = 0.42; shake = 28; slowmo = 0.7;
-  banner('瞬 影 斩');
-  const pa = Math.atan2(ey - sy, ex - sx);
-  P.x = ex; P.y = ey; P.vx = Math.cos(pa) * 160; P.vy = Math.sin(pa) * 160;
-  P.inv = Math.max(P.inv, 0.3);
-  for (let s = 0; s <= 6; s++) P.trail.push({ x:sx + (ex - sx) * s / 6, y:sy + (ey - sy) * s / 6, a:pa, t:0.16 + s * 0.03 });
-  const dxs = ex - sx, dys = ey - sy, len2 = dxs * dxs + dys * dys || 1;
-  const onPath = (tx, ty, tr) => { const tt = clamp(((tx - sx) * dxs + (ty - sy) * dys) / len2, 0, 1); return Math.hypot(tx - (sx + dxs * tt), ty - (sy + dys * tt)) < tr + 34; };
-  for (let i = enemies.length - 1; i >= 0; i--){
-    const e = enemies[i];
-    if (e.warmup > 0 || e.phased) continue;
-    if (!onPath(e.x, e.y, e.r)) continue;
-    cutmarks.push({ x:e.x, y:e.y, a:pa, len:e.r * 2 + 30, t:0 });
-    strikeEnemyWithUlt(i, 10, pa, { knock:420, col:'#a45cff', particles:14, deathBurst:true });
+  sfx('ult'); hitstop = 0.12; flashA = 0.5; shake = 32; slowmo = 0.7;
+  banner('瞬 影 · 刃 环 爆');
+  const pa = Math.atan2(tgt.y - sy, tgt.x - sx);
+  P.x = tgt.x; P.y = tgt.y; P.inv = Math.max(P.inv, 0.35);
+  for (let s = 0; s <= 6; s++) P.trail.push({ x:sx + (tgt.x - sx) * s / 6, y:sy + (tgt.y - sy) * s / 6, a:pa, t:0.16 + s * 0.03 });
+  for (const rk of shadeRing){
+    rings.push({ x:rk.x, y:rk.y, r:18, max:120, a:1, col:'#a45cff' });
+    burst(rk.x, rk.y, '#c89bff', 16, 0, true);
+    for (let i = enemies.length - 1; i >= 0; i--){
+      const e = enemies[i];
+      if (e.warmup > 0 || e.phased) continue;
+      if (Math.hypot(e.x - rk.x, e.y - rk.y) < 110 + e.r)
+        strikeEnemyWithUlt(i, 8, Math.atan2(e.y - rk.y, e.x - rk.x), { knock:380, col:'#a45cff', particles:10, deathBurst:true });
+    }
+    if (boss && boss.warmup <= 0 && Math.hypot(boss.x - rk.x, boss.y - rk.y) < 110 + boss.r)
+      strikeBossWithUlt(6, Math.atan2(boss.y - rk.y, boss.x - rk.x), { col:'#a45cff', particles:14, knock:60 });
   }
-  if (boss && boss.warmup <= 0 && onPath(boss.x, boss.y, boss.r))
-    strikeBossWithUlt(14, pa, { col:'#a45cff', particles:30, knock:120 });
-  rings.push({ x:ex, y:ey, r:20, max:150, a:1, col:'#a45cff' });
-  ultLines.push({ x1:sx, y1:sy, x2:ex, y2:ey, t:0, col:'#c89bff', glow:'#a45cff', w:5, grow:6 });
-  shake = Math.max(shake, 24);
+  shadeRing = []; shadeRingT = 0;
 }
 
 // ---------- 粒子 ----------
@@ -1700,7 +1701,21 @@ function update(dt){
       if (--k.pierce <= 0) kunai.splice(i, 1);
     }
   }
-  if (shadeMark){ shadeMarkT -= dt; if (shadeMarkT <= 0) shadeMark = null; }
+  if (shadeRingT > 0){   // 刃环领域：窗口内持续 AoE，超时未引爆则消散
+    shadeRingT -= dt; shadeTickT -= dt;
+    if (shadeTickT <= 0){
+      shadeTickT = 0.28;
+      for (const rk of shadeRing){
+        for (let i = enemies.length - 1; i >= 0; i--){
+          const e = enemies[i];
+          if (e.warmup > 0 || e.phased) continue;
+          if (Math.hypot(e.x - rk.x, e.y - rk.y) < 46 + e.r) hitEnemy(i, 1, Math.atan2(e.y - rk.y, e.x - rk.x), 120, false);
+        }
+        if (boss && boss.warmup <= 0 && Math.hypot(boss.x - rk.x, boss.y - rk.y) < 46 + boss.r) dmgBoss(1, 0, 20);
+      }
+    }
+    if (shadeRingT <= 0) shadeRing = [];
+  }
 
   // 冰封领域：范围内敌人持续减速
   for (let i = icefields.length - 1; i >= 0; i--){
@@ -2353,8 +2368,13 @@ function update(dt){
     $('comboFill').style.width = clamp(comboT / (BASE_COMBO_WIN + ST.comboWin) * 100, 0, 100) + '%';
     $('multEl2').textContent = '×' + multOf().toFixed(1);
   } else cb.classList.remove('on');
-  $('ultFill').style.width = ult + '%';
-  $('ultWrap').classList.toggle('ready', ult >= 100);
+  if (shadeRing.length){
+    $('ultFill').style.width = clamp(shadeRingT / SHADE_RING_WINDOW * 100, 0, 100) + '%';
+    $('ultWrap').classList.add('ready');
+  } else {
+    $('ultFill').style.width = ult + '%';
+    $('ultWrap').classList.toggle('ready', ult >= 100);
+  }
   $('xpFill').style.width = clamp(xp / xpNeed() * 100, 0, 100) + '%';
   $('lvlEl').textContent = 'LV ' + level;
   if (IS_TOUCH){
@@ -2367,6 +2387,16 @@ function update(dt){
     } else {
       el.style.background = '';
       el.classList.add('ready');
+    }
+    // 影 · 刃环引爆窗口：ult 按钮一圈倒计时 CD（不点第二段会失去）
+    const ub = $('tUlt');
+    if (shadeRing.length){
+      const uw = clamp(shadeRingT / SHADE_RING_WINDOW, 0, 1);
+      ub.style.background = `conic-gradient(rgba(164,92,255,.9) ${uw * 360}deg, rgba(19,19,27,.85) 0deg)`;
+      ub.classList.add('ready');
+    } else {
+      ub.style.background = '';
+      ub.classList.toggle('ready', ult >= 100);
     }
   }
 }
@@ -2685,13 +2715,22 @@ function draw(){
     ctx.restore();
   }
   ctx.shadowBlur = 0;
-  if (shadeMark){
-    ctx.strokeStyle = '#a45cff'; ctx.lineWidth = 2;
-    ctx.globalAlpha = 0.5 + Math.sin(nowMs / 90) * 0.35;
-    ctx.beginPath(); ctx.arc(shadeMark.x, shadeMark.y, 16 + Math.sin(nowMs / 120) * 3, 0, TAU); ctx.stroke();
-    ctx.globalAlpha = 0.9;
-    poly(shadeMark.x, shadeMark.y, 9, 4, nowMs / 200); ctx.stroke();
-    ctx.globalAlpha = 1;
+  if (shadeRing.length){
+    const rp = 0.4 + Math.sin(nowMs / 80) * 0.3;
+    for (const rk of shadeRing){
+      ctx.save();
+      ctx.translate(rk.x, rk.y);
+      ctx.rotate(rk.a + nowMs / 70);
+      ctx.shadowColor = '#a45cff'; ctx.shadowBlur = crowded ? 0 : 10;
+      ctx.fillStyle = '#c89bff';
+      poly(0, 0, 11, 4, 0); ctx.fill();
+      ctx.restore();
+      ctx.strokeStyle = '#a45cff'; ctx.lineWidth = 1.5;
+      ctx.globalAlpha = rp * 0.6;
+      ctx.beginPath(); ctx.arc(rk.x, rk.y, 46, 0, TAU); ctx.stroke();
+      ctx.globalAlpha = 1;
+    }
+    ctx.shadowBlur = 0;
   }
 
   // 收割者焰痕

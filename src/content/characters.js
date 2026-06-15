@@ -14,5 +14,5 @@ export const CHARS = {
   shade: { nm:'影 · SHADE', ic:'✶', col:'#a45cff', rgb:'164,92,255', hp:4, spd:362,
     weapon:{ id:'kunai', name:'苦无', feel:'苦无飞掷 · 标记瞬影斩' },
     desc:'苦无\n远程飞掷 + 标记瞬影', unlock:{ txt:'最深波次 10 解锁', ok:s=>s.bestWave>=10, prog:s=>[Math.min(s.bestWave,10),10] }, stat:'HP 4 · 速度 ●●●●●',
-    slash:[{dur:.13,range:120,half:.4,dmg:1,kb:200,hs:.03},{dur:.13,range:122,half:.4,dmg:1,kb:210,hs:.03},{dur:.13,range:124,half:.4,dmg:1,kb:220,hs:.035},{dur:.2,range:130,half:.4,dmg:1,kb:260,hs:.05}] }
+    slash:[{dur:.2,range:120,half:.4,dmg:1,kb:200,hs:.03},{dur:.2,range:122,half:.4,dmg:1,kb:210,hs:.03},{dur:.2,range:124,half:.4,dmg:1,kb:220,hs:.035},{dur:.28,range:130,half:.4,dmg:1,kb:260,hs:.05}] }
 };
