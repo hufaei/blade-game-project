@@ -771,14 +771,20 @@ function doAttack(){
   const finalStage = !dashStrikeActive && P.atkStage === PC.slash.length - 1;
   const heavy = dashStrikeActive || finalStage;
   const range = st.range * ST.range;
+  // 斩 · 优先索敌：有敌人就朝最近的敌人转向（锥角放宽到~115°，侧面敌人也算）；
+  // 终结拔刀瞬移更远，索敌半径随之扩到瞬移距离，确保"有敌人就冲向它"而非冲进空地；
+  // 范围内无敌人时保持原朝向（保留自由/随机手感）。其余角色索敌不变。
+  const isIai = wid === 'iaido';
+  const seekR = (isIai && finalStage) ? range * 1.7 : range + 50;
+  const cone = isIai ? 2.0 : 1.5;
   let best = null, bd = 1e9;
   const all = boss ? enemies.concat([boss]) : enemies;
   for (const e of all){
     if (e.warmup > 0 || e.phased) continue;
     const dx = e.x - P.x, dy = e.y - P.y, d = Math.hypot(dx, dy);
-    if (d < range + e.r + 50 && d < bd){
+    if (d < seekR + e.r && d < bd){
       const da = Math.abs(angDiff(P.face, Math.atan2(dy, dx)));
-      if (da < 1.5){ bd = d; best = Math.atan2(dy, dx); }
+      if (da < cone){ bd = d; best = Math.atan2(dy, dx); }
     }
   }
   if (best !== null) P.face += angDiff(P.face, best) * 0.65;
