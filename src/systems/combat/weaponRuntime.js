@@ -23,7 +23,7 @@ export function createWeaponAttack({ character, stage, baseSlash, face, range })
         weaponId,
         visual: 'iaidash',
         movementBoost: 0,
-        invuln: 0.15,
+        invuln: 0.3,
         dash: { dist: range * 1.55, offset: (Math.random() < 0.5 ? -1 : 1) * 0.42 },
         hitArcs: []
       };

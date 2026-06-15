@@ -32,8 +32,20 @@ addEventListener('resize', resize); resize();
 // 视口（世界单位）与镜头左上角
 function viewW(){ return cv.width / VIEW_Z; }
 function viewH(){ return cv.height / VIEW_Z; }
-function camX(){ return P.x - viewW() / 2; }
-function camY(){ return P.y - viewH() / 2; }
+// 阻尼跟随镜头：角色先移动，镜头带滞后地回正 —— 位移感来自镜头落后，而非把角色钉死在中心
+const CAM_LAG = 0.00008;   // 滞后量（时间常数~0.1s，越小越紧跟）
+const CAM_MAX = 0.2;       // 角色离中心的最大偏移（占视野短边比例，瞬移再远也不会被甩出屏幕）
+let camCX = null, camCY = null;   // 平滑镜头中心（世界坐标，null=刚开局吸附到角色）
+function updateCamera(dt){
+  if (camCX === null){ camCX = P.x; camCY = P.y; return; }
+  const k = 1 - Math.pow(CAM_LAG, dt);
+  camCX += (P.x - camCX) * k; camCY += (P.y - camCY) * k;
+  const maxOff = Math.min(viewW(), viewH()) * CAM_MAX;
+  const ox = P.x - camCX, oy = P.y - camCY, dd = Math.hypot(ox, oy);
+  if (dd > maxOff){ camCX = P.x - ox / dd * maxOff; camCY = P.y - oy / dd * maxOff; }
+}
+function camX(){ return (camCX === null ? P.x : camCX) - viewW() / 2; }
+function camY(){ return (camCY === null ? P.y : camCY) - viewH() / 2; }
 
 let charId = 'blade';
 let PC = CHARS.blade;
@@ -489,6 +501,7 @@ function startGame(daily, raid = false){
   ult = (stats.meta.ult || 0) * 25;
   if (stats.dev) ult = 100;
   P.x = W/2; P.y = H/2; P.vx = P.vy = 0;
+  camCX = null; camCY = null;   // 重置镜头，下一帧吸附到角色，避免开局镜头从旧位置飞过来
   P.maxHp = (MUT.hp3 ? 3 : PC.hp) + (stats.meta.hp || 0);
   P.hp = P.maxHp; P.spd = PC.spd;
   P.atkStage = 0; P.atkT = 0; P.inv = 0; P.dashT = 0; P.dashCD = 0; P.trail = []; P.dashStrikeT = 0;
@@ -2970,6 +2983,7 @@ function loop(now){
       shake = Math.max(0, shake - 60 * dt);
       shakeX = rnd(-shake, shake); shakeY = rnd(-shake, shake);
     }
+    updateCamera(dt);
     draw();
   } catch(e){
     if (!window.__frameErrs || window.__frameErrs.length < 3){
